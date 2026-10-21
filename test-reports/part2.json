@@ -1,0 +1,222 @@
+{
+  "meta": {
+    "ts": 1792547004,
+    "u1e": "qa.user1.1792547004@example.com",
+    "u1p": "QaTest123!",
+    "u1ph": "0911547004",
+    "u2e": "qa.user2.1792547004@example.com",
+    "u2p": "QaTest123!",
+    "u2ph": "0912547004",
+    "xss_email": "qa.xss.1792547004@example.com",
+    "xss_reg": 201,
+    "t1": null,
+    "t2": null,
+    "to": null,
+    "variant_id": "e0369daf-9ce5-4769-b91d-d6734d4a46df",
+    "stock_qty": null,
+    "prod_id": "cbf718ae-077c-4141-b825-5cef5f1a5162",
+    "cookies_note": "re-login next batch"
+  },
+  "results": [
+    {
+      "ID": "ENV-01",
+      "Fn": "Healthz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ok\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "ENV-02",
+      "Fn": "Readyz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ready\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-PORT-01",
+      "Fn": "Postgres 5432",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-PORT-02",
+      "Fn": "Redis 6379",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-PORT-03",
+      "Fn": "Redis 6380",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-REDIS-01",
+      "Fn": "Redis no password",
+      "Status": "FAIL",
+      "Expected": "requirepass",
+      "Actual": "ping PONG no AUTH",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-HDR-01",
+      "Fn": "FE security headers",
+      "Status": "FAIL",
+      "Expected": "CSP/XFO/XCTO/HSTS/RP",
+      "Actual": "missing=['Content-Security-Policy', 'X-Frame-Options', 'X-Content-Type-Options', 'Strict-Transport-Security', 'Referrer-Policy']",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-ADMIN-01",
+      "Fn": "Admin UI anon",
+      "Status": "FAIL",
+      "Expected": "block UI",
+      "Actual": "200 len=8927",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-ADMIN-02",
+      "Fn": "Admin API anon",
+      "Status": "PASS",
+      "Expected": "401/403",
+      "Actual": "401 {\"detail\":\"Authentication required\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-GHN-01",
+      "Fn": "GHN unsigned",
+      "Status": "FAIL",
+      "Expected": "401/403",
+      "Actual": "200 {\"status\":\"ignored\",\"reason\":\"fulfillment_not_found\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "VAL-PHONE-01",
+      "Fn": "Invalid phone",
+      "Status": "FAIL",
+      "Expected": "400/422",
+      "Actual": "409 {\"detail\":\"SĐT đã được sử dụng\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-XSS-01",
+      "Fn": "Register XSS name",
+      "Status": "PASS",
+      "Expected": "reject/accept",
+      "Actual": "201 {\"id\":\"e923ac73-ccb3-4503-8b55-fb87290854bb\",\"email\":\"qa.xss.1792547004@example.com\",\"phone\":\"0903547004\",\"full_name\":\"<img src=x onerror=alert(1)>QA\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:",
+      "Evidence": ""
+    },
+    {
+      "ID": "AUTH-REG-01",
+      "Fn": "Register user1",
+      "Status": "PASS",
+      "Expected": "201",
+      "Actual": "201 {\"id\":\"fa1eff9f-53bf-4a88-9ef7-756de761a2e8\",\"email\":\"qa.user1.1792547004@example.com\",\"phone\":\"0911547004\",\"full_name\":\"QA User One\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.597478Z\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "AUTH-REG-02",
+      "Fn": "Register user2",
+      "Status": "PASS",
+      "Expected": "201",
+      "Actual": "201 {\"id\":\"1ebf5a05-be4c-4580-bde0-9e184a1f021c\",\"email\":\"qa.user2.1792547004@example.com\",\"phone\":\"0912547004\",\"full_name\":\"QA User Two\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.911573Z\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "AUTH-LOGIN-01",
+      "Fn": "Login user1",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"id\":\"fa1eff9f-53bf-4a88-9ef7-756de761a2e8\",\"email\":\"qa.user1.1792547004@example.com\",\"phone\":\"0911547004\",\"full_name\":\"QA User One\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.597478Z\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "AUTH-LOGIN-02",
+      "Fn": "Login user2",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"id\":\"1ebf5a05-be4c-4580-bde0-9e184a1f021c\",\"email\":\"qa.user2.1792547004@example.com\",\"phone\":\"0912547004\",\"full_name\":\"QA User Two\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.911573Z\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "AUTH-OWNER-01",
+      "Fn": "Login owner",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"id\":\"2b30a4ef-39eb-498e-99e6-cb2e7964c94b\",\"email\":\"owner@demo.com\",\"phone\":null,\"full_name\":\"Owner Demo\",\"role\":\"owner\",\"created_at\":\"2026-10-20T08:13:14.910924Z\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "ADDR-01",
+      "Fn": "Create address",
+      "Status": "FAIL",
+      "Expected": "201",
+      "Actual": "401 {\"detail\":\"Authentication required\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "ADDR-02",
+      "Fn": "List addresses",
+      "Status": "FAIL",
+      "Expected": "200",
+      "Actual": "401 {\"detail\":\"Authentication required\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "ADDR-03",
+      "Fn": "Update",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "no addr id",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-IDOR-01",
+      "Fn": "IDOR patch",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "no addr id",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-IDOR-02",
+      "Fn": "IDOR del",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "no addr id",
+      "Evidence": ""
+    },
+    {
+      "ID": "ADDR-04",
+      "Fn": "Delete",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "no addr id",
+      "Evidence": ""
+    },
+    {
+      "ID": "PROD-01",
+      "Fn": "List products",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 [{\"id\":\"cbf718ae-077c-4141-b825-5cef5f1a5162\",\"category_id\":\"3996fff7-8a31-4dd7-a7cd-d21dcc946258\",\"name\":\"Vòng cổ nylon size M\",\"slug\":\"vong-co-nylon-m\",\"brand\":\"WalkEasy\",\"pet_type\":\"both\",\"life_sta",
+      "Evidence": ""
+    },
+    {
+      "ID": "PROD-02",
+      "Fn": "Resolve variant",
+      "Status": "PASS",
+      "Expected": "variant",
+      "Actual": "v=e0369daf-9ce5-4769-b91d-d6734d4a46df stock=None prod=cbf718ae-077c-4141-b825-5cef5f1a5162",
+      "Evidence": ""
+    }
+  ]
+}

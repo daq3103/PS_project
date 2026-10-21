@@ -1,0 +1,140 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-tz: &tz
+  TZ: Asia/Ho_Chi_Minh
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      <<: *tz
+    depends_on:
+      - nextjs
+      - fastapi-api
+    mem_limit: 128m
+    logging: *default-logging
+
+  nextjs:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      <<: *tz
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=1024
+      INTERNAL_API_URL: http://fastapi-api:8000
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+      TRUST_PROXY_HEADERS: "true"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - fastapi-api
+    mem_limit: 1280m
+    logging: *default-logging
+
+  fastapi-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --no-proxy-headers
+    restart: always
+    env_file: .env
+    environment:
+      <<: *tz
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - community_uploads:/app/data/community-uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+    mem_limit: 640m
+    logging: *default-logging
+
+  fastapi-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: arq app.worker.tasks.WorkerSettings
+    restart: always
+    env_file: .env
+    environment:
+      <<: *tz
+    volumes:
+      - community_uploads:/app/data/community-uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-queue:
+        condition: service_started
+    mem_limit: 384m
+    logging: *default-logging
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      <<: *tz
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=8MB
+      -c max_connections=120
+      -c wal_keep_size=512MB
+      -c timezone=Asia/Ho_Chi_Minh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Port intentionally not published; access via nginx/API only.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 2304m
+    logging: *default-logging
+
+  redis-cache:
+    image: redis:7.4-alpine
+    restart: always
+    environment:
+      <<: *tz
+    command: redis-server --maxmemory 320mb --maxmemory-policy allkeys-lru --save "" --appendonly no --requirepass ${REDIS_CACHE_PASSWORD}
+    # Port intentionally not published; access only from app/worker inside Docker network.
+    mem_limit: 384m
+    logging: *default-logging
+
+  redis-queue:
+    image: redis:7.4-alpine
+    restart: always
+    environment:
+      <<: *tz
+    command: redis-server --maxmemory 320mb --maxmemory-policy noeviction --appendonly yes --appendfsync everysec --requirepass ${REDIS_QUEUE_PASSWORD}
+    volumes:
+      - redis_queue_data:/data
+    # Port intentionally not published; access only from app/worker inside Docker network.
+    mem_limit: 384m
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  redis_queue_data:
+  community_uploads:

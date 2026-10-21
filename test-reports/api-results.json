@@ -1,0 +1,458 @@
+[
+  {
+    "ID": "ADDR-01",
+    "Fn": "Create address",
+    "Status": "PASS",
+    "Expected": "201",
+    "Actual": "201 {\"id\":\"69b3558a-5178-44e1-8007-6d88cb4bc5cb\",\"recipient_name\":\"QA Addr One\",\"recipient_phone\":\"0901234567\",\"province_id\":202,\"province_name\":\"HCM\",\"district_id\":1442,\"district_name\":\"Q1\",\"ward_code\":\"",
+    "Evidence": ""
+  },
+  {
+    "ID": "ADDR-02",
+    "Fn": "List addresses",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 [{\"id\":\"69b3558a-5178-44e1-8007-6d88cb4bc5cb\",\"recipient_name\":\"QA Addr One\",\"recipient_phone\":\"0901234567\",\"province_id\":202,\"province_name\":\"HCM\",\"district_id\":1442,\"district_name\":\"Q1\",\"ward_code\":",
+    "Evidence": ""
+  },
+  {
+    "ID": "ADDR-03",
+    "Fn": "Update address",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"id\":\"69b3558a-5178-44e1-8007-6d88cb4bc5cb\",\"recipient_name\":\"QA Addr One\",\"recipient_phone\":\"0901234567\",\"province_id\":202,\"province_name\":\"HCM\",\"district_id\":1442,\"district_name\":\"Q1\",\"ward_code\":\"",
+    "Evidence": ""
+  },
+  {
+    "ID": "ADDR-04",
+    "Fn": "Delete own addr",
+    "Status": "PASS",
+    "Expected": "200/204",
+    "Actual": "204 ",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-LOGIN-01",
+    "Fn": "Login user1",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 cookies=['access_token', 'refresh_token', 'csrf_token']",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-LOGIN-02",
+    "Fn": "Login user2",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 cookies=['access_token', 'refresh_token', 'csrf_token']",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-LOGOUT-01",
+    "Fn": "Logout",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "204 ",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-ME-01",
+    "Fn": "GET /me anonymous",
+    "Status": "PASS",
+    "Expected": "200 with user null (guest session)",
+    "Actual": "200 user=null csrf+guest issued",
+    "Evidence": "by design"
+  },
+  {
+    "ID": "AUTH-ME-02",
+    "Fn": "GET /me user1",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"user\":{\"id\":\"fa1eff9f-53bf-4a88-9ef7-756de761a2e8\",\"email\":\"qa.user1.1792547004@example.com\",\"phone\":\"0911547004\",\"full_name\":\"QA User One\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.597478",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-OWNER-01",
+    "Fn": "Login owner",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 role check {\"id\":\"2b30a4ef-39eb-498e-99e6-cb2e7964c94b\",\"email\":\"owner@demo.com\",\"phone\":null,\"full_name\":\"Owner Demo\",\"role\":\"owner\",\"created_at\":\"2026-10-20T08:13:14.910924Z\"} cookies=['access_token', 'refresh_token', 'csrf_token']",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-REG-01",
+    "Fn": "Register user1",
+    "Status": "PASS",
+    "Expected": "201",
+    "Actual": "201 {\"id\":\"fa1eff9f-53bf-4a88-9ef7-756de761a2e8\",\"email\":\"qa.user1.1792547004@example.com\",\"phone\":\"0911547004\",\"full_name\":\"QA User One\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.597478Z\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "AUTH-REG-02",
+    "Fn": "Register user2",
+    "Status": "PASS",
+    "Expected": "201",
+    "Actual": "201 {\"id\":\"1ebf5a05-be4c-4580-bde0-9e184a1f021c\",\"email\":\"qa.user2.1792547004@example.com\",\"phone\":\"0912547004\",\"full_name\":\"QA User Two\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:13.911573Z\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "CART-OVER-01",
+    "Fn": "Add qty>stock",
+    "Status": "FAIL",
+    "Expected": "reject",
+    "Actual": "200 stock~50 qty=99 {\"id\":\"a50a073f-1953-4a2a-b3fc-62d14592c6af\",\"items\":[{\"id\":\"b01d91e0-0670-4f5d-9619-c2280f1f21f3\",\"variant_id\":\"e0369daf-9ce5-4769-b91d-d6734d4a46df\",\"qty\":99,\"sku\":\"COLLAR-M-BLU\",\"title\":\"Xanh / M\",",
+    "Evidence": ""
+  },
+  {
+    "ID": "CAT-01",
+    "Fn": "Categories",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 [{\"id\":\"8243b08d-c40d-414a-b8b4-440f928d8342\",\"parent_id\":null,\"name\":\"Thức ăn h",
+    "Evidence": ""
+  },
+  {
+    "ID": "CHK-GUEST-01",
+    "Fn": "Guest checkout COD",
+    "Status": "PASS",
+    "Expected": "201",
+    "Actual": "201 {\"id\":\"6dcdba34-a3da-4f5a-b8f5-3c8044c48bee\",\"order_code\":\"9RHOSTVS8P\",\"status\":\"confirmed\",\"payment_method\":\"cod\",\"payment_status\":\"unpaid\",\"subtotal_amount\":89000,\"discount_amount\":0,\"shipping_fee\":",
+    "Evidence": ""
+  },
+  {
+    "ID": "CHK-USER-01",
+    "Fn": "Customer checkout",
+    "Status": "PASS",
+    "Expected": "201",
+    "Actual": "201 {\"id\":\"5a18d9f5-34a5-4449-9cc0-830c7e3c0642\",\"order_code\":\"KETHJJMRHF\",\"status\":\"confirmed\",\"payment_method\":\"cod\",\"payment_status\":\"unpaid\",\"subtotal_amount\":89000,\"discount_amount\":0,\"shipping_fee\":",
+    "Evidence": ""
+  },
+  {
+    "ID": "ENV-01",
+    "Fn": "Healthz",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"status\":\"ok\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "ENV-02",
+    "Fn": "Readyz",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"status\":\"ready\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "FE-LINT-01",
+    "Fn": "next lint / ESLint",
+    "Status": "NOT RUN",
+    "Expected": "lint clean",
+    "Actual": "eslint not configured; next lint interactive wizard",
+    "Evidence": "no eslint dep"
+  },
+  {
+    "ID": "FE-PW-01",
+    "Fn": "Playwright E2E",
+    "Status": "NOT RUN",
+    "Expected": "e2e pass",
+    "Actual": "playwright not installed",
+    "Evidence": ""
+  },
+  {
+    "ID": "FE-TSC-01",
+    "Fn": "TypeScript tsc --noEmit",
+    "Status": "PASS",
+    "Expected": "0 errors",
+    "Actual": "exit 0",
+    "Evidence": ""
+  },
+  {
+    "ID": "INT-502-01",
+    "Fn": "Nginx 502 after nextjs recreate",
+    "Status": "PASS",
+    "Expected": "stable now; known risk",
+    "Actual": "current 200; prior session 502 after rebuild",
+    "Evidence": "regression risk P2"
+  },
+  {
+    "ID": "INT-NGINX-01",
+    "Fn": "Nginx root proxy",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 len=29576",
+    "Evidence": ""
+  },
+  {
+    "ID": "INT-NGINX-02",
+    "Fn": "Nginx API proxy",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 [{\"id\":\"8243b08d-c40d-414a-b8b4-440f928d8342\",\"parent_id\":null,\"name\":\"Thức ăn h",
+    "Evidence": ""
+  },
+  {
+    "ID": "ORD-GUEST-01",
+    "Fn": "Anonymous GET /orders/{id}",
+    "Status": "PASS",
+    "Expected": "403; guest uses /orders/track instead",
+    "Actual": "403 denied; track 200 masked",
+    "Evidence": "recheck after flaky 404"
+  },
+  {
+    "ID": "ORD-OWN-01",
+    "Fn": "Customer GET own order",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"id\":\"5a18d9f5-34a5-4449-9cc0-830c7e3c0642\",\"order_code\":\"KETHJJMRHF\",\"status\":\"confirmed\",\"payment",
+    "Evidence": ""
+  },
+  {
+    "ID": "ORD-SELFCONF-01",
+    "Fn": "Customer self-confirm unpaid VietQR",
+    "Status": "FAIL",
+    "Expected": "staff-only or require paid",
+    "Actual": "200 confirmed unpaid vietqr pending->confirmed",
+    "Evidence": "P1 business bug"
+  },
+  {
+    "ID": "ORD-TRACK-01",
+    "Fn": "Track guest order",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"order_code\":\"9RHOSTVS8P\",\"status\":\"confirmed\",\"payment_status\":\"unpaid\",\"total_amount\":119000,\"customer_name\":\"QA Guest Buyer\",\"customer_phone_masked\":\"0987***321\",\"shipping_address_masked\":{\"ward_c",
+    "Evidence": ""
+  },
+  {
+    "ID": "OWN-01",
+    "Fn": "Owner dashboard",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 {\"orders_today\":0,\"revenue_today\":0,\"pending_orders\":0,\"pending_reviews\":3,\"drift_count\":0,\"out_of_stock_variants\":0,\"low_stock_variants\":0,\"lots_expiring_30d\":0,\"recent_orders\":[{\"id\":\"0b95f40c-c491-",
+    "Evidence": ""
+  },
+  {
+    "ID": "OWN-02",
+    "Fn": "Owner orders",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 [{\"id\":\"0b95f40c-c491-46dd-b9c8-66ba53c5aff6\",\"order_code\":\"W3KLNK17RW\",\"status\":\"packed\",\"payment_method\":\"cod\",\"paymen",
+    "Evidence": ""
+  },
+  {
+    "ID": "OWN-03",
+    "Fn": "Owner lots",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 [{\"id\":\"07aa5c08-acde-4647-9b58-0ddd066e0c05\",\"variant_id\":\"b8a5445a-74c3-475c-9d0b-d14a2a9c0e09\",\"lot_no\":\"SEED-001\",\"q",
+    "Evidence": ""
+  },
+  {
+    "ID": "PROD-01",
+    "Fn": "List products",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 [{\"id\":\"cbf718ae-077c-4141-b825-5cef5f1a5162\",\"category_id\":\"3996fff7-8a31-4dd7-a7cd-d21dcc946258\",\"name\":\"Vòng cổ nylon size M\",\"slug\":\"vong-co-nylon-m\",\"brand\":\"WalkEasy\",\"pet_type\":\"both\",\"life_sta",
+    "Evidence": ""
+  },
+  {
+    "ID": "PROD-02",
+    "Fn": "Resolve variant",
+    "Status": "PASS",
+    "Expected": "variant",
+    "Actual": "v=e0369daf-9ce5-4769-b91d-d6734d4a46df stock=None prod=cbf718ae-077c-4141-b825-5cef5f1a5162",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-ADMIN-01",
+    "Fn": "Admin UI anon",
+    "Status": "FAIL",
+    "Expected": "block UI",
+    "Actual": "200 len=8927",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-ADMIN-02",
+    "Fn": "Admin API anon",
+    "Status": "PASS",
+    "Expected": "401/403",
+    "Actual": "401 {\"detail\":\"Authentication required\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-AUTHZ-01",
+    "Fn": "Customer admin dash",
+    "Status": "PASS",
+    "Expected": "403",
+    "Actual": "403 {\"detail\":\"Staff access required\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-GHN-01",
+    "Fn": "GHN unsigned",
+    "Status": "FAIL",
+    "Expected": "401/403",
+    "Actual": "200 {\"status\":\"ignored\",\"reason\":\"fulfillment_not_found\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-HDR-01",
+    "Fn": "FE security headers",
+    "Status": "FAIL",
+    "Expected": "CSP/XFO/XCTO/HSTS/RP",
+    "Actual": "missing=['Content-Security-Policy', 'X-Frame-Options', 'X-Content-Type-Options', 'Strict-Transport-Security', 'Referrer-Policy']",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-IDOR-01",
+    "Fn": "User2 PATCH user1 addr",
+    "Status": "PASS",
+    "Expected": "403/404",
+    "Actual": "404 {\"detail\":\"Địa chỉ không tồn tại\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-IDOR-02",
+    "Fn": "User2 DELETE user1 addr",
+    "Status": "PASS",
+    "Expected": "403/404",
+    "Actual": "404 {\"detail\":\"Địa chỉ không tồn tại\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-IDOR-03",
+    "Fn": "User2 confirm user1",
+    "Status": "PASS",
+    "Expected": "403",
+    "Actual": "403 {\"detail\":\"Không có quyền\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-IDOR-04",
+    "Fn": "User2 GET user1 order",
+    "Status": "PASS",
+    "Expected": "403/404",
+    "Actual": "403 {\"detail\":\"Không có quyền xem đơn\"}",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-PORT-01",
+    "Fn": "Postgres 5432",
+    "Status": "FAIL",
+    "Expected": "not published",
+    "Actual": "open=True",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-PORT-02",
+    "Fn": "Redis 6379",
+    "Status": "FAIL",
+    "Expected": "not published",
+    "Actual": "open=True",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-PORT-03",
+    "Fn": "Redis 6380",
+    "Status": "FAIL",
+    "Expected": "not published",
+    "Actual": "open=True",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-REDIS-01",
+    "Fn": "Redis no password",
+    "Status": "FAIL",
+    "Expected": "requirepass",
+    "Actual": "ping PONG no AUTH",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-XSS-01",
+    "Fn": "Register XSS name",
+    "Status": "PASS",
+    "Expected": "reject/accept",
+    "Actual": "201 {\"id\":\"e923ac73-ccb3-4503-8b55-fb87290854bb\",\"email\":\"qa.xss.1792547004@example.com\",\"phone\":\"0903547004\",\"full_name\":\"<img src=x onerror=alert(1)>QA\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:44:",
+    "Evidence": ""
+  },
+  {
+    "ID": "SEC-XSS-02",
+    "Fn": "XSS name FE render",
+    "Status": "PASS",
+    "Expected": "FE escapes text nodes",
+    "Actual": "API stores raw HTML; UserMenu uses React text escape; no dangerouslySetInnerHTML",
+    "Evidence": "stored unsanitized but FE safe"
+  },
+  {
+    "ID": "SEC-XSS-03",
+    "Fn": "Stored XSS risk in DB/API",
+    "Status": "FAIL",
+    "Expected": "sanitize on write",
+    "Actual": "full_name stored with HTML tags in DB/API",
+    "Evidence": "defense in depth"
+  },
+  {
+    "ID": "TOOL-MYPY-01",
+    "Fn": "mypy app (container)",
+    "Status": "FAIL",
+    "Expected": "0 errors",
+    "Actual": "15 errors in 6 files",
+    "Evidence": ""
+  },
+  {
+    "ID": "TOOL-PYTEST-01",
+    "Fn": "pytest encryption in container",
+    "Status": "PASS",
+    "Expected": "pass",
+    "Actual": "1 passed test_encryption.py",
+    "Evidence": "tests not in image; host copy"
+  },
+  {
+    "ID": "TOOL-PYTEST-02",
+    "Fn": "pytest suite completeness",
+    "Status": "FAIL",
+    "Expected": "meaningful suite",
+    "Actual": "only encryption unit test; no API/E2E suite",
+    "Evidence": ""
+  },
+  {
+    "ID": "TOOL-RUFF-01",
+    "Fn": "ruff check app (container)",
+    "Status": "FAIL",
+    "Expected": "0 errors",
+    "Actual": "130 errors (B008,E501,F401,F821,...)",
+    "Evidence": "temp install in container"
+  },
+  {
+    "ID": "UI-ADMIN-01",
+    "Fn": "Admin UI login flow",
+    "Status": "NOT RUN",
+    "Expected": "owner uses /admin after login",
+    "Actual": "API owner PASS; UI click-through not automated",
+    "Evidence": ""
+  },
+  {
+    "ID": "UI-HOME-01",
+    "Fn": "Home page loads",
+    "Status": "PASS",
+    "Expected": "200",
+    "Actual": "200 len=29576",
+    "Evidence": ""
+  },
+  {
+    "ID": "UI-RESP-01",
+    "Fn": "Responsive UI manual",
+    "Status": "NOT RUN",
+    "Expected": "ok mobile/tablet",
+    "Actual": "no browser automation this session",
+    "Evidence": ""
+  },
+  {
+    "ID": "VAL-PHONE-01",
+    "Fn": "Invalid phone letters",
+    "Status": "FAIL",
+    "Expected": "400/422",
+    "Actual": "201 {\"id\":\"9e8a4168-4cfc-4527-bb38-dc0c1050ddaa\",\"email\":\"qa.badphone3.1792547004@example.com\",\"phone\":\"12ab34cd56\",\"full_name\":\"QA BadPhone3\",\"role\":\"customer\",\"created_at\":\"2026-10-21T01:45:25.715296Z\"}",
+    "Evidence": ""
+  }
+]

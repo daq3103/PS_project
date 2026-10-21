@@ -1,0 +1,299 @@
+{
+  "ts": 1792548874,
+  "meta": {
+    "variant_id": "067faa90-c423-4a0d-b792-ccdd67990ecd",
+    "stock_qty": 49,
+    "guest_order": null,
+    "guest_order_id": null
+  },
+  "results": [
+    {
+      "ID": "BUG-01",
+      "Fn": "GHN webhook unsigned",
+      "Status": "PASS",
+      "Expected": "401/403 reject unsigned",
+      "Actual": "401 {\"detail\":\"Missing webhook signature\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-02",
+      "Fn": "Customer self-confirm unpaid VietQR",
+      "Status": "BLOCKED",
+      "Expected": "reject",
+      "Actual": "no variant/login",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-03",
+      "Fn": "DB/Redis exposure + Redis auth",
+      "Status": "FAIL",
+      "Expected": "ports closed + requirepass",
+      "Actual": "requirepass OK but 5432/6379/6380 still published on host",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-03a",
+      "Fn": "Postgres 5432 not published",
+      "Status": "FAIL",
+      "Expected": "not open on host",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-03b",
+      "Fn": "Redis 6379 not published",
+      "Status": "FAIL",
+      "Expected": "not open on host",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-03c",
+      "Fn": "Redis 6380 not published",
+      "Status": "FAIL",
+      "Expected": "not open on host",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-03d",
+      "Fn": "Redis requires auth",
+      "Status": "PASS",
+      "Expected": "PING without AUTH fails",
+      "Actual": "6379_pong=False 6380_pong=False",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-04",
+      "Fn": "Cart qty > stock",
+      "Status": "BLOCKED",
+      "Expected": "reject",
+      "Actual": "no variant/login",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-05",
+      "Fn": "Nginx proxy stable (no 502 now)",
+      "Status": "PASS",
+      "Expected": "200 FE+API via nginx",
+      "Actual": "fe=200 api=200 [{\"id\":\"8243b08d-c40d-414a-b8b4-440f928d8342\",\"parent_id\":nu",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-06",
+      "Fn": "Register invalid phone",
+      "Status": "PASS",
+      "Expected": "400/422",
+      "Actual": "422 {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"phone\"],\"msg\":\"Value error, Số điện thoại không hợp lệ\",\"input\":\"12ab34cd56\",\"ctx\":{\"error\":{}}}]}",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-07",
+      "Fn": "Security headers FE/nginx",
+      "Status": "PASS",
+      "Expected": "CSP/XFO/XCTO/HSTS/RP on FE or nginx",
+      "Actual": "fe_missing=[]; nginx_missing=[]",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-08",
+      "Fn": "Admin UI without login",
+      "Status": "FAIL",
+      "Expected": "redirect/block UI",
+      "Actual": "200 len=11121",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-09",
+      "Fn": "Sanitize full_name on write",
+      "Status": "PASS",
+      "Expected": "strip HTML",
+      "Actual": "201 no raw tag in response",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-10",
+      "Fn": "Tooling overall (ruff/mypy/suite)",
+      "Status": "FAIL",
+      "Expected": "clean lint + meaningful suite",
+      "Actual": "ruff 132, mypy 15, only encryption pytest",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-10a",
+      "Fn": "ruff check app",
+      "Status": "FAIL",
+      "Expected": "0 errors",
+      "Actual": "132 errors (was 130)",
+      "Evidence": "B008/E501/F401/..."
+    },
+    {
+      "ID": "BUG-10b",
+      "Fn": "mypy app",
+      "Status": "FAIL",
+      "Expected": "0 errors",
+      "Actual": "15 errors in 6 files (same ballpark)",
+      "Evidence": ""
+    },
+    {
+      "ID": "BUG-10c",
+      "Fn": "pytest encryption",
+      "Status": "PASS",
+      "Expected": "pass",
+      "Actual": "1 passed",
+      "Evidence": ""
+    },
+    {
+      "ID": "REG-NEW-01",
+      "Fn": "Login broken after Redis requirepass",
+      "Status": "FAIL",
+      "Expected": "200 login",
+      "Actual": "500 AuthenticationError: Redis auth required; API/worker cannot connect",
+      "Evidence": "P0 new regression"
+    },
+    {
+      "ID": "REG-NEW-02",
+      "Fn": "Worker crash loop",
+      "Status": "FAIL",
+      "Expected": "worker healthy",
+      "Actual": "fastapi-worker Restarting; Redis AuthenticationError",
+      "Evidence": "P0"
+    },
+    {
+      "ID": "REG-NEW-03",
+      "Fn": "Checkout COD guest",
+      "Status": "FAIL",
+      "Expected": "201",
+      "Actual": "500 Internal Server Error",
+      "Evidence": "blocked by Redis auth mismatch"
+    },
+    {
+      "ID": "SMOKE-ADMIN-API-ANON",
+      "Fn": "Admin API anon",
+      "Status": "PASS",
+      "Expected": "401/403",
+      "Actual": "401 {\"detail\":\"Authentication required\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-AUTHZ",
+      "Fn": "authz",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "owner login failed",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-CART",
+      "Fn": "Add cart qty=1",
+      "Status": "BLOCKED",
+      "Expected": "200",
+      "Actual": "no variant/login",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-COD",
+      "Fn": "Guest COD checkout",
+      "Status": "FAIL",
+      "Expected": "201",
+      "Actual": "500 Internal Server Error",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-HEALTH",
+      "Fn": "Healthz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ok\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-HOME",
+      "Fn": "Home FE :3000",
+      "Status": "PASS",
+      "Expected": "200 HTML",
+      "Actual": "200 len=29576",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-LOGIN",
+      "Fn": "Login customer",
+      "Status": "FAIL",
+      "Expected": "200",
+      "Actual": "500 cookies=[]",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-NGINX",
+      "Fn": "Home via nginx :80",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 len=29576",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-OWN-DASH",
+      "Fn": "dashboard",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "owner login failed",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-OWN-ORDERS",
+      "Fn": "orders",
+      "Status": "BLOCKED",
+      "Expected": "-",
+      "Actual": "owner login failed",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-OWNER-LOGIN",
+      "Fn": "Login owner demo",
+      "Status": "FAIL",
+      "Expected": "200 role=owner",
+      "Actual": "500 role_ok=False",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-PRODUCTS",
+      "Fn": "List products",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 [{\"id\":\"cbf718ae-077c-4141-b825-5cef5f1a5162\",\"category_id\":\"3996fff7-8a31-4dd7-",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-READY",
+      "Fn": "Readyz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ready\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-REG",
+      "Fn": "Register customer",
+      "Status": "PASS",
+      "Expected": "201",
+      "Actual": "201 {\"id\":\"ebd48b1a-11e7-41fb-b258-b93ec424d517\",\"email\":\"qa.retest.u1.1792548874@example.com\",\"phone\":\"0913548874\",\"full_name\":\"QA Retest One\",\"role\":\"customer\",\"created_at\":\"2026-10-21T02:14:57.056948Z\"",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-TRACK",
+      "Fn": "Track guest order",
+      "Status": "BLOCKED",
+      "Expected": "200",
+      "Actual": "no order",
+      "Evidence": ""
+    },
+    {
+      "ID": "SMOKE-VARIANT",
+      "Fn": "Resolve variant+stock",
+      "Status": "PASS",
+      "Expected": "have variant",
+      "Actual": "v=067faa90-c423-4a0d-b792-ccdd67990ecd stock=49",
+      "Evidence": ""
+    }
+  ]
+}

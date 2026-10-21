@@ -1,0 +1,93 @@
+{
+  "ts": 1792547004,
+  "results": [
+    {
+      "ID": "ENV-01",
+      "Fn": "Healthz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ok\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "ENV-02",
+      "Fn": "Readyz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ready\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-PORT-01",
+      "Fn": "Postgres 5432",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-PORT-02",
+      "Fn": "Redis 6379",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-PORT-03",
+      "Fn": "Redis 6380",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-REDIS-01",
+      "Fn": "Redis no password",
+      "Status": "FAIL",
+      "Expected": "requirepass",
+      "Actual": "ping PONG no AUTH",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-HDR-01",
+      "Fn": "FE security headers",
+      "Status": "FAIL",
+      "Expected": "CSP/XFO/XCTO/HSTS/RP",
+      "Actual": "missing=['Content-Security-Policy', 'X-Frame-Options', 'X-Content-Type-Options', 'Strict-Transport-Security', 'Referrer-Policy']",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-ADMIN-01",
+      "Fn": "Admin UI anon",
+      "Status": "FAIL",
+      "Expected": "block UI",
+      "Actual": "200 len=8927",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-ADMIN-02",
+      "Fn": "Admin API anon",
+      "Status": "PASS",
+      "Expected": "401/403",
+      "Actual": "401 {\"detail\":\"Authentication required\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "SEC-GHN-01",
+      "Fn": "GHN unsigned",
+      "Status": "FAIL",
+      "Expected": "401/403",
+      "Actual": "200 {\"status\":\"ignored\",\"reason\":\"fulfillment_not_found\"}",
+      "Evidence": ""
+    },
+    {
+      "ID": "VAL-PHONE-01",
+      "Fn": "Invalid phone",
+      "Status": "FAIL",
+      "Expected": "400/422",
+      "Actual": "409 {\"detail\":\"SĐT đã được sử dụng\"}",
+      "Evidence": ""
+    }
+  ]
+}

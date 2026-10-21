@@ -1,0 +1,70 @@
+{
+  "categories": [
+    {"name": "Thức ăn hạt", "slug": "thuc-an-hat", "sort_order": 1},
+    {"name": "Phụ kiện", "slug": "phu-kien", "sort_order": 2}
+  ],
+  "products": [
+    {
+      "category_slug": "thuc-an-hat",
+      "name": "Hạt gà 1.5kg",
+      "slug": "hat-ga-15kg",
+      "pet_type": "dog",
+      "brand": "PetChoice",
+      "status": "active",
+      "short_description": "Thức ăn hạt vị gà cho chó trưởng thành",
+      "variants": [
+        {
+          "sku": "DOG-FOOD-15",
+          "title": "Túi 1.5kg",
+          "price": 165000,
+          "weight_grams": 1500,
+          "cached_available_qty": 20
+        }
+      ]
+    },
+    {
+      "category_slug": "thuc-an-hat",
+      "name": "Pate cá hồi 85g",
+      "slug": "pate-ca-hoi-85g",
+      "pet_type": "cat",
+      "brand": "MeowChef",
+      "status": "active",
+      "short_description": "Pate ướt vị cá hồi cho mèo",
+      "has_expiry": true,
+      "variants": [
+        {
+          "sku": "CAT-PATE-85",
+          "title": "Lon 85g",
+          "price": 28000,
+          "weight_grams": 85,
+          "cached_available_qty": 50
+        }
+      ]
+    },
+    {
+      "category_slug": "phu-kien",
+      "name": "Vòng cổ nylon size M",
+      "slug": "vong-co-nylon-m",
+      "pet_type": "both",
+      "brand": "WalkEasy",
+      "status": "active",
+      "short_description": "Vòng cổ nylon điều chỉnh được",
+      "variants": [
+        {
+          "sku": "COLLAR-M-RED",
+          "title": "Đỏ / M",
+          "price": 89000,
+          "weight_grams": 80,
+          "cached_available_qty": 15
+        },
+        {
+          "sku": "COLLAR-M-BLU",
+          "title": "Xanh / M",
+          "price": 89000,
+          "weight_grams": 80,
+          "cached_available_qty": 12
+        }
+      ]
+    }
+  ]
+}

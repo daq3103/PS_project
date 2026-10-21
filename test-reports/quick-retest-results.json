@@ -1,0 +1,131 @@
+{
+  "ts": 1792550124,
+  "results": [
+    {
+      "ID": "ENV-HEALTH",
+      "Fn": "Healthz",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"status\":\"ok\"}"
+    },
+    {
+      "ID": "AUTH-REG",
+      "Fn": "Register customer",
+      "Status": "PASS",
+      "Expected": "201",
+      "Actual": "201 {\"id\":\"5aed05b1-1791-40e1-ab4a-20eba77c95a4\",\"email\":\"qa.quick.u1.1792550124@example.com\",\"phone\":\"0914550124\",\"full_name\":\"QA Quick One\",\"role\":\"customer\",\"created_at\":\"2026-10-21T02:35:47.068724Z\"}"
+    },
+    {
+      "ID": "LOGIN-CUST",
+      "Fn": "Login customer",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 cookies=['access_token', 'refresh_token', 'csrf_token'] {\"id\":\"5aed05b1-1791-40e1-ab4a-20eba77c95a4\",\"email\":\"qa.quick.u1.1792550124@exa"
+    },
+    {
+      "ID": "LOGIN-OWNER",
+      "Fn": "Login owner",
+      "Status": "PASS",
+      "Expected": "200 role=owner",
+      "Actual": "200 role_ok=True {\"id\":\"2b30a4ef-39eb-498e-99e6-cb2e7964c94b\",\"email\":\"owner@demo.com\",\"phone\":nu"
+    },
+    {
+      "ID": "BUG-03-PG",
+      "Fn": "Postgres 5432 published",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True"
+    },
+    {
+      "ID": "BUG-03-RC",
+      "Fn": "Redis 6379 published",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True"
+    },
+    {
+      "ID": "BUG-03-RQ",
+      "Fn": "Redis 6380 published",
+      "Status": "FAIL",
+      "Expected": "not published",
+      "Actual": "open=True"
+    },
+    {
+      "ID": "BUG-03-AUTH",
+      "Fn": "Redis no-auth PING fails",
+      "Status": "PASS",
+      "Expected": "no PONG without AUTH",
+      "Actual": "6379_pong=False 6380_pong=False"
+    },
+    {
+      "ID": "BUG-08",
+      "Fn": "Admin UI anon",
+      "Status": "FAIL",
+      "Expected": "redirect/block",
+      "Actual": "200 len=11121"
+    },
+    {
+      "ID": "ADMIN-API-ANON",
+      "Fn": "Admin API anon",
+      "Status": "PASS",
+      "Expected": "401/403",
+      "Actual": "401 {\"detail\":\"Authentication required\"}"
+    },
+    {
+      "ID": "PROD",
+      "Fn": "Resolve variant",
+      "Status": "PASS",
+      "Expected": "variant",
+      "Actual": "v=067faa90-c423-4a0d-b792-ccdd67990ecd stock=49"
+    },
+    {
+      "ID": "BUG-04",
+      "Fn": "Cart qty > stock",
+      "Status": "PASS",
+      "Expected": "reject",
+      "Actual": "409 over=89 stock=49 {\"detail\":\"Chỉ còn 49 sản phẩm trong kho\"}"
+    },
+    {
+      "ID": "COD-GUEST",
+      "Fn": "Guest COD checkout",
+      "Status": "PASS",
+      "Expected": "201",
+      "Actual": "201 {\"id\":\"3221feae-1398-4fe6-a4ca-93497614a15f\",\"order_code\":\"TOA8XHSTE6\",\"status\":\"confirmed\",\"payment_method\":\"cod\",\"payment_status\":\"unpaid\",\"subtotal_amount\":89000,\"discount_amount\":0,\"shipping_fee\":"
+    },
+    {
+      "ID": "TRACK",
+      "Fn": "Track guest order",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"order_code\":\"TOA8XHSTE6\",\"status\":\"confirmed\",\"payment_status\":\"unpaid\",\"total_amount\":119000,\"customer_name\":\"QA Quick Guest\",\"customer_phone_masked\":\"0977***122\",\"shipping_address_masked\":{\"ward_c"
+    },
+    {
+      "ID": "BUG-02",
+      "Fn": "Customer self-confirm unpaid VietQR",
+      "Status": "PASS",
+      "Expected": "403/409",
+      "Actual": "403 before=pending/unpaid {\"detail\":\"Đơn VietQR cần thanh toán trước khi xác nhận\"}"
+    },
+    {
+      "ID": "OWN-DASH",
+      "Fn": "Owner dashboard",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 {\"orders_today\":5,\"revenue_today\":595000,\"pending_orders\":1,\"pending_reviews\":3,\"drift_count\":0,\"out"
+    },
+    {
+      "ID": "OWN-ORDERS",
+      "Fn": "Owner list orders",
+      "Status": "PASS",
+      "Expected": "200",
+      "Actual": "200 len=2158"
+    },
+    {
+      "ID": "OWN-AUTHZ",
+      "Fn": "Customer blocked admin",
+      "Status": "PASS",
+      "Expected": "403",
+      "Actual": "403 {\"detail\":\"Staff access required\"}"
+    }
+  ]
+}

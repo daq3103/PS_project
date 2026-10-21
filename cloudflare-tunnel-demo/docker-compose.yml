@@ -1,0 +1,17 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ps_project_cloudflared
+    restart: unless-stopped
+    # Quick tunnel: tạo URL ngẫu nhiên *.trycloudflare.com, không cần token
+    command:
+      - "tunnel"
+      - "--url"
+      - "http://nginx:80"
+      - "--no-autoupdate"
+    networks:
+      - ps_project_default
+
+networks:
+  ps_project_default:
+    external: true

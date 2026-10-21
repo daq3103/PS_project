@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+
+  /* Locked Petshop tokens (frontend-design skill) */
+  --color-ink: #121a16;
+  --color-ink-muted: #5a6a62;
+  --color-paper: #f2f5f1;
+  --color-surface: #ffffff;
+  --color-line: #c9d4cc;
+  --color-forest: #1a4535;
+  --color-forest-deep: #123228;
+  --color-moss: #3a6b54;
+  --color-honey: #a66b28;
+  --color-danger: #a33b2d;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(180deg, rgba(242, 245, 241, 0.94), rgba(242, 245, 241, 0.98)),
+    url("/brand/bg-texture.jpg");
+  background-size: auto, 720px;
+  background-repeat: repeat;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Must stay in @layer base so utility classes (text-white, text-forest) can override */
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-forest);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 4px rgba(26, 69, 53, 0.18);
+}
+
+::selection {
+  background: rgba(26, 69, 53, 0.2);
+}
+
+/* One storefront load motion: hero settle only */
+@keyframes soft-zoom {
+  from {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.animate-hero-image {
+  animation: soft-zoom 1.4s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-hero-image {
+    animation: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+  }
+}

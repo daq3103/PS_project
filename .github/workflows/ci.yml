@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: petshop
+          POSTGRES_PASSWORD: ci_test_only
+          POSTGRES_DB: petshop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U petshop"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql+asyncpg://petshop:ci_test_only@localhost:5432/petshop
+      REDIS_CACHE_URL: redis://localhost:6379/0
+      PYTHONPATH: .
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend deps
+        run: |
+          pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check app tests
+      - name: Pytest
+        run: python scripts/test_community.py
+      - name: Community and analytics typecheck
+        run: mypy app/modules/community app/worker/community_tasks.py app/modules/analytics
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install frontend deps
+        run: npm install
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000

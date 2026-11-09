@@ -22,7 +22,7 @@ async def validate_promo(
 ) -> Promotion:
     now = datetime.now(UTC)
     promo = await session.scalar(
-        select(Promotion).where(Promotion.code == code.upper().strip())
+        select(Promotion).where(Promotion.code == code.upper().strip()).with_for_update()
     )
     if not promo or not promo.is_active:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Mã giảm giá không hợp lệ")
@@ -122,7 +122,7 @@ async def release_promo_on_cancel(session: AsyncSession, order_id: UUID) -> None
         select(PromotionUsage).where(
             PromotionUsage.order_id == order_id,
             PromotionUsage.status == "reserved",
-        )
+        ).with_for_update()
     )
     if not usage:
         return

@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { CommunityPostPublicOut } from "@/lib/api-client";
+import type { CommunityPostPublicOut, PetOptions } from "@/lib/api-client";
+import { lifeLabels } from "./labels";
 
 const TYPE_LABELS: Record<string, string> = {
   lost_pet: "Tin mất",
@@ -16,7 +17,7 @@ const PET_LABELS: Record<string, string> = {
   other: "Khác",
 };
 
-export function PostCard({ post }: { post: CommunityPostPublicOut }) {
+export function PostCard({ post, options }: { post: CommunityPostPublicOut; options?: PetOptions }) {
   const thumb = post.images[0];
   return (
     <Link
@@ -43,9 +44,11 @@ export function PostCard({ post }: { post: CommunityPostPublicOut }) {
         </span>
       </div>
       <div className="p-4">
+        <p className="mb-2 text-xs font-medium text-forest">{post.lifecycle_status === "resolved" ? (post.post_type === "adoption" ? "Đã nhận nuôi" : "Đã đoàn tụ") : post.lifecycle_status === "open" && post.post_type === "adoption" ? "Chờ nhận nuôi" : lifeLabels[post.lifecycle_status]}</p>
         <p className="text-xs text-ink-muted">
           {PET_LABELS[post.pet_type]} {post.breed ? `· ${post.breed}` : ""} {post.color ? `· ${post.color}` : ""}
         </p>
+        {options && post.pet_details?.colors?.length > 0 && <p className="mt-1 text-xs text-ink-muted">{post.pet_details.colors.map(color => options.colors[color]).filter(Boolean).join(" · ")}{options.coat_lengths[post.pet_details.coat_length] ? ` · Lông ${options.coat_lengths[post.pet_details.coat_length].toLocaleLowerCase("vi-VN")}` : ""}</p>}
         <h3 className="mt-1 font-display text-lg leading-snug text-ink group-hover:text-forest">
           {post.title}
         </h3>

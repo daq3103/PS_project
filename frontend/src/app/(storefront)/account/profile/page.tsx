@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { GoogleSignIn } from "@/components/GoogleSignIn";
+import { RecoveryEmail } from "@/components/RecoveryEmail";
 import { api, type UserDto } from "@/lib/api-client";
+import { contactPhoneError } from "@/lib/phone";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -12,6 +15,7 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
@@ -36,6 +40,9 @@ export default function ProfilePage() {
     setSaving(true);
     setError("");
     setSuccess("");
+    const invalidPhone = phone.trim() ? contactPhoneError(phone) : "";
+    setPhoneError(invalidPhone);
+    if (invalidPhone) { setSaving(false); return; }
     try {
       const body: { full_name?: string; phone?: string } = {};
       if (fullName.trim()) body.full_name = fullName.trim();
@@ -59,6 +66,10 @@ export default function ProfilePage() {
       <h1 className="font-display text-4xl text-ink">Hồ sơ</h1>
       <p className="mt-2 text-ink-muted">Cập nhật thông tin cá nhân.</p>
 
+      <p className="mt-3 text-sm">Tên tài khoản: {user.username || "Đăng nhập bằng Google hoặc tài khoản cũ"}</p>
+      {user.google_linked ? <p className="mt-3 text-sm text-forest">Đã liên kết Google</p> : <GoogleSignIn link onLinked={() => { void api.me().then(result => setUser(result.user)); }} />}
+      <Link href="/account/addresses" className="mt-4 inline-block text-forest underline">Quản lý địa chỉ nhận hàng</Link>
+      <RecoveryEmail current={user.email} verified={user.email_verified} onSaved={() => { void api.me().then(result => setUser(result.user)); }} />
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block text-sm">
           <span className="text-ink-muted">Họ tên</span>
@@ -76,20 +87,11 @@ export default function ProfilePage() {
           <input
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
+            aria-invalid={!!phoneError}
             className="mt-1 block w-full rounded-sm border border-line bg-surface px-3 py-2 outline-none focus:border-moss"
           />
-        </label>
-
-        <label className="block text-sm">
-          <span className="text-ink-muted">Email</span>
-          <input
-            type="email"
-            value={user.email ?? ""}
-            disabled
-            className="mt-1 block w-full rounded-sm border border-line bg-ink/5 px-3 py-2 text-ink-muted"
-          />
-          <span className="text-xs text-ink-muted">Email không thể đổi trong MVP.</span>
+          {phoneError && <span role="alert" className="mt-1 block text-danger">{phoneError}</span>}
         </label>
 
         {error && <p className="text-sm text-danger">{error}</p>}

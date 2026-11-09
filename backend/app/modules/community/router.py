@@ -1,8 +1,9 @@
 """Public and authenticated self-service rescue endpoints."""
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,9 +34,16 @@ async def locations():
     return CATALOG
 
 
+@router.get("/pet-options")
+async def pet_options():
+    from app.modules.community.pet_traits import pet_options as catalog
+
+    return catalog()
+
+
 @router.get("/posts", response_model=schemas.CommunityFeedOut)
 async def list_posts(
-    filters: schemas.CommunityFeedQs = Depends(), session: AsyncSession = Depends(get_db)
+    filters: Annotated[schemas.CommunityFeedQs, Query()], session: AsyncSession = Depends(get_db)
 ):
     items, cursor = await service.list_public_posts(session, filters)
     return {"items": items, "next_cursor": cursor}

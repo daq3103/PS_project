@@ -1,3 +1,4 @@
+import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductCard } from "@/components/ProductCard";
@@ -9,6 +10,14 @@ type Props = {
 };
 
 export const revalidate = 60;
+export async function generateMetadata({params, searchParams}: Props) {
+  const {category_slug} = await params;
+  try {
+    const category = await api.getCategoryBySlug(category_slug);
+    const page = Math.max(1, Number((await searchParams).page) || 1);
+    return pageMetadata(category.name, `Khám phá ${category.name.toLowerCase()} dành cho thú cưng tại PetHome. Xem sản phẩm, giá và tình trạng hàng.`, `/c/${category.slug}${page > 1 ? `?page=${page}` : ""}`);
+  } catch { return {title: "Không tìm thấy danh mục", robots: {index: false}}; }
+}
 
 export default async function CategoryPage({ params, searchParams }: Props) {
   const { category_slug } = await params;
@@ -31,6 +40,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     category_slug,
     sort,
     limit: "48",
+    offset: String(Math.max(0, (Number(sp.page) || 1) - 1) * 48),
   });
   if (petType) qs.set("pet_type", petType);
   if (minPrice) qs.set("min_price", minPrice);
@@ -122,6 +132,10 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         />
       </div>
 
+      <nav aria-label="Phân trang sản phẩm" className="mt-4 flex justify-between text-sm text-forest">
+        {Number(sp.page) > 1 ? <Link href={`${filterHref({})}${filterHref({}).includes("?") ? "&" : "?"}page=${Number(sp.page)-1}`}>Trang trước</Link> : <span />}
+        {products.length === 48 && <Link href={`${filterHref({})}${filterHref({}).includes("?") ? "&" : "?"}page=${(Number(sp.page)||1)+1}`}>Trang sau</Link>}
+      </nav>
       {products.length === 0 ? (
         <p className="mt-8 text-ink-muted">Chưa có sản phẩm trong danh mục này.</p>
       ) : (

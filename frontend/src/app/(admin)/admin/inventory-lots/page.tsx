@@ -1,4 +1,5 @@
 "use client";
+import { DeleteRecordButton } from "@/components/admin/DeleteRecordButton";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -26,15 +27,17 @@ export default function AdminInventoryLotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [variantFilter, setVariantFilter] = useState("");
+  const [stockAlerts, setStockAlerts] = useState<{id:string; product_name:string; title:string; sku:string; quantity:number; threshold:number}[]>([]);
+  const [showStockAlerts, setShowStockAlerts] = useState(false);
   const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "expiring">("all");
   const [selectedLot, setSelectedLot] = useState<InventoryLotOut | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "adjust">("view");
 
   const variantMap = useMemo(() => {
-    const map = new Map<string, { sku: string; title: string }>();
+    const map = new Map<string, { sku: string; title: string; unit: string }>();
     for (const p of products) {
       for (const v of p.variants) {
-        map.set(v.id, { sku: v.sku, title: v.title });
+        map.set(v.id, { sku: v.sku, title: v.title, unit: v.options?.unit || "cái" });
       }
     }
     return map;
@@ -44,27 +47,42 @@ export default function AdminInventoryLotsPage() {
     setLoading(true);
     setError("");
     try {
-      const [lotsData, prods] = await Promise.all([
-        api.adminListInventoryLots(variantFilter || undefined),
-        api.listProducts("limit=200"),
+      const loadProducts = async () => {
+        const all: ProductDto[] = [];
+        for (let offset = 0; ; offset += 200) {
+          const page = await api.adminListProducts(`limit=200&offset=${offset}`);
+          all.push(...page);
+          if (page.length < 200) return all;
+        }
+      };
+      const [lotsData, prods, alerts] = await Promise.all([
+        api.adminListInventoryLots(),
+        loadProducts(),
+        api.stockAlerts(),
       ]);
       setLots(lotsData);
+      setStockAlerts(alerts);
       setProducts(prods);
+      setSelectedLot(old => old ? lotsData.find(lot => lot.id === old.id) ?? null : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tải được dữ liệu kho");
     } finally {
       setLoading(false);
     }
-  }, [variantFilter]);
+  }, []);
 
   useEffect(() => {
+    setShowStockAlerts(new URLSearchParams(window.location.search).get("stock") === "low");
     void load();
   }, [load]);
 
   const filteredLots = useMemo(() => {
     const now = new Date();
     return lots.filter((lot) => {
-      if (!lot.expiry_date) return true;
+      const variant = variantMap.get(lot.variant_id);
+      const query = variantFilter.trim().toLocaleLowerCase("vi-VN");
+      if (query && ![lot.variant_id, lot.lot_no, variant?.sku, variant?.title].some(value => value?.toLocaleLowerCase("vi-VN").includes(query))) return false;
+      if (!lot.expiry_date) return expiryFilter === "all";
       if (expiryFilter === "expired") return new Date(lot.expiry_date) <= now;
       if (expiryFilter === "expiring") {
         const d = new Date(lot.expiry_date);
@@ -73,9 +91,10 @@ export default function AdminInventoryLotsPage() {
       }
       return true;
     });
-  }, [lots, expiryFilter]);
+  }, [lots, expiryFilter, variantFilter, variantMap]);
 
   const columns: Column<InventoryLotOut>[] = [
+    { key: "delete", header: "", cell: (l) => <DeleteRecordButton kind="lots" id={l.id} onDeleted={load} /> },
     {
       key: "lot",
       header: "Lô",
@@ -99,9 +118,9 @@ export default function AdminInventoryLotsPage() {
         );
       },
     },
-    { key: "on_hand", header: "Tồn", align: "right", cell: (l) => l.qty_on_hand },
-    { key: "reserved", header: "Giữ", align: "right", cell: (l) => l.qty_reserved },
-    { key: "available", header: "Khả dụng", align: "right", cell: (l) => l.available ?? "—" },
+    { key: "on_hand", header: "Tồn", align: "right", cell: (l) => `${l.qty_on_hand} ${variantMap.get(l.variant_id)?.unit || "cái"}` },
+    { key: "reserved", header: "Giữ", align: "right", cell: (l) => `${l.qty_reserved} ${variantMap.get(l.variant_id)?.unit || "cái"}` },
+    { key: "available", header: "Khả dụng", align: "right", cell: (l) => `${l.available ?? "—"} ${variantMap.get(l.variant_id)?.unit || "cái"}` },
     {
       key: "expiry",
       header: "HSD",
@@ -154,18 +173,21 @@ export default function AdminInventoryLotsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-forest">Lô hàng</h1>
-          <p className="mt-1 text-sm text-ink-muted">Nhập lô, theo dõi FEFO và điều chỉnh tồn.</p>
+          <p className="mt-1 text-sm text-ink-muted">Nhập lô, ưu tiên hàng gần hết hạn và điều chỉnh số lượng trong kho.</p>
         </div>
       </div>
 
+      {showStockAlerts && <section className="mt-6 rounded-xl border border-honey/30 p-4"><h2 className="font-display text-xl">Mặt hàng hết hoặc sắp hết ({stockAlerts.length})</h2>
+        {!stockAlerts.length ? <p className="mt-3">Không có mặt hàng hết hoặc sắp hết.</p> : <ul className="mt-3 divide-y divide-line">{stockAlerts.map(v => <li key={v.id} className="flex flex-wrap justify-between gap-3 py-3"><span>{v.product_name} · {v.title} · {v.sku}</span><strong>Còn {v.quantity} · Ngưỡng {v.threshold}</strong><button className="text-sm text-forest underline" onClick={() => setVariantFilter(v.sku)}>Xem các lô</button></li>)}</ul>}
+        <p className="mt-3 text-sm text-ink-muted">Danh sách này gồm cả mẫu chưa có lô nhập. Nhập lô mới để bổ sung tồn kho.</p></section>}
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <FilterBar>
-            <FilterField label="Lọc variant">
+            <FilterField label="Lọc mẫu hàng">
               <input
                 value={variantFilter}
                 onChange={(e) => setVariantFilter(e.target.value)}
-                placeholder="UUID"
+                placeholder="Mã hàng, tên mẫu hoặc mã lô"
                 className="w-48 rounded-sm border border-line bg-paper px-2 py-1.5 font-mono text-xs"
               />
             </FilterField>
@@ -196,6 +218,8 @@ export default function AdminInventoryLotsPage() {
               columns={columns}
               rows={filteredLots}
               keyExtractor={(l) => l.id}
+              onRowClick={(l) => { setSelectedLot(l); setDrawerMode("view"); }}
+              rowAriaLabel={(l) => `Mở sổ lô ${l.lot_no}`}
               loading={loading}
               empty="Không có lô hàng."
             />
@@ -240,6 +264,7 @@ function CreateLotForm({
     () => products.find((p) => p.id === productId),
     [products, productId],
   );
+  const selectedUnit = selectedProduct?.variants.find(v => v.id === variantId)?.options?.unit || "cái";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -300,13 +325,14 @@ function CreateLotForm({
             <option value="">Chọn biến thể</option>
             {selectedProduct?.variants.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.title} ({v.sku})
+                {v.title} ({v.sku}) · {v.options?.unit || "cái"}
               </option>
             ))}
           </select>
         </label>
         <Field label="Mã lô" value={lotNo} onChange={setLotNo} required />
-        <Field label="SL nhập" value={qty} onChange={setQty} type="number" required />
+        <Field label={`Số lượng nhập (${selectedUnit})`} value={qty} onChange={setQty} type="number" required />
+        <p className="text-xs text-ink-muted">Mỗi 1 đơn vị là 1 biến thể đã chọn. Ví dụ: 10 túi hoặc 2 tải.</p>
         <Field label="Giá vốn (đ)" value={unitCost} onChange={setUnitCost} type="number" required />
         <Field label="Hạn dùng" value={expiry} onChange={setExpiry} type="date" />
         <Field label="Ghi chú" value={note} onChange={setNote} />
@@ -332,7 +358,7 @@ function LotDrawer({
   lot: InventoryLotOut;
   mode: "view" | "adjust";
   onClose: () => void;
-  onMutated: () => void;
+  onMutated: () => void | Promise<void>;
 }) {
   const [movements, setMovements] = useState<StockMovementOut[]>([]);
   const [loadingMovements, setLoadingMovements] = useState(false);
@@ -381,7 +407,7 @@ function LotDrawer({
       });
       setDelta("");
       setNote("");
-      onMutated();
+      await onMutated();
       await loadMovements();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Điều chỉnh thất bại");

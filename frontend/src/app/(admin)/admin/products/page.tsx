@@ -1,4 +1,6 @@
 "use client";
+import { DeleteRecordButton } from "@/components/admin/DeleteRecordButton";
+import { ValidatedForm } from "@/components/ValidatedForm";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -18,17 +20,8 @@ import { DataTable, type Column } from "@/components/admin/DataTable";
 import { Drawer } from "@/components/admin/Drawer";
 import { FilterBar, FilterField } from "@/components/admin/FilterBar";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-
-function slugify(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 80);
-}
+import { CategoryCreateForm } from "@/components/admin/CategoryCreateForm";
+import { slugify } from "@/lib/slugify";
 
 const PET_OPTIONS = [
   { value: "both", label: "Chó & mèo" },
@@ -45,6 +38,7 @@ export default function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [selected, setSelected] = useState<ProductDto | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,8 +50,8 @@ export default function AdminProductsPage() {
       if (categoryFilter) qs.set("category_id", categoryFilter);
       if (q.trim()) qs.set("q", q.trim());
       const [prods, cats] = await Promise.all([
-        api.listProducts(qs.toString()),
-        api.listCategories(false),
+        api.adminListProducts(qs.toString()),
+        api.adminListCategories(),
       ]);
       setProducts(prods);
       setCategories(cats);
@@ -88,6 +82,7 @@ export default function AdminProductsPage() {
   }
 
   const columns: Column<ProductDto>[] = [
+    { key: "delete", header: "", cell: (p) => <DeleteRecordButton kind="products" id={p.id} onDeleted={load} /> },
     {
       key: "image",
       header: "",
@@ -109,7 +104,7 @@ export default function AdminProductsPage() {
       cell: (p) => (
         <div>
           <p className="font-medium">{p.name}</p>
-          <p className="text-xs text-ink-muted">{p.slug}</p>
+
         </div>
       ),
     },
@@ -186,7 +181,11 @@ export default function AdminProductsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-forest">Sản phẩm</h1>
-          <p className="mt-1 text-sm text-ink-muted">Quản lý catalog, biến thể và hình ảnh.</p>
+          <p className="mt-1 text-sm text-ink-muted">Tạo danh mục, thêm sản phẩm, rồi hoàn thiện hình ảnh và tồn kho.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/categories" className="rounded-full border border-forest px-4 py-2 text-sm font-medium text-forest hover:bg-forest/5">Quản lý danh mục</Link>
+          <button type="button" onClick={() => setCreating(true)} className="rounded-full bg-forest px-4 py-2 text-sm font-medium text-white hover:bg-forest-deep">+ Thêm sản phẩm</button>
         </div>
       </div>
 
@@ -197,7 +196,7 @@ export default function AdminProductsPage() {
             onChange={(e) => setQ(e.target.value)}
             onBlur={() => void load()}
             onKeyDown={(e) => e.key === "Enter" && void load()}
-            placeholder="Tên / slug / SKU"
+            placeholder="Tên, tên trong đường dẫn hoặc mã hàng"
             className="w-56 rounded-sm border border-line bg-paper px-2 py-1.5"
           />
         </FilterField>
@@ -238,18 +237,11 @@ export default function AdminProductsPage() {
 
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
-      <div className="mt-4 grid gap-6 lg:grid-cols-4">
-        <div className="lg:col-span-3">
-          <DataTable
-            columns={columns}
-            rows={products}
-            keyExtractor={(p) => p.id}
-            loading={loading}
-            empty="Không có sản phẩm."
-          />
-        </div>
-        <CreateProductForm categories={categories} onCreated={load} />
-      </div>
+      <div className="mt-4"><DataTable columns={columns} rows={products} keyExtractor={(p) => p.id} onRowClick={setSelected} rowAriaLabel={(p) => `Mở chi tiết sản phẩm ${p.name}`} loading={loading} empty={q || statusFilter || categoryFilter ? "Không có sản phẩm phù hợp với bộ lọc." : categories.length ? "Chưa có sản phẩm. Bấm Thêm sản phẩm để tạo mới." : "Hãy tạo danh mục trước, rồi thêm sản phẩm."} /></div>
+
+      {creating && <Drawer open onClose={() => setCreating(false)} title="Thêm sản phẩm" width="max-w-2xl">
+        <CreateProductForm categories={categories} onCategoryCreated={load} onCreated={(product) => { setCreating(false); setSelected(product); void load(); }} />
+      </Drawer>}
 
       {selected && (
         <ProductEditDrawer
@@ -265,32 +257,44 @@ export default function AdminProductsPage() {
 
 function CreateProductForm({
   categories,
+  onCategoryCreated,
   onCreated,
 }: {
   categories: CategoryDto[];
-  onCreated: () => void;
+  onCategoryCreated: () => Promise<void>;
+  onCreated: (product: ProductDto) => void;
 }) {
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
+  const [categoryId, setCategoryId] = useState("");
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [brand, setBrand] = useState("");
   const [petType, setPetType] = useState<"dog" | "cat" | "both">("both");
-  const [status, setStatus] = useState<"draft" | "active" | "hidden">("active");
+  const [status, setStatus] = useState<"draft" | "active" | "hidden">("draft");
   const [shortDesc, setShortDesc] = useState("");
   const [sku, setSku] = useState("");
   const [variantTitle, setVariantTitle] = useState("Mặc định");
-  const [price, setPrice] = useState("100000");
-  const [weight, setWeight] = useState("500");
+  const [unit, setUnit] = useState("cái");
+  const [price, setPrice] = useState("");
+  const [weight, setWeight] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const activeCategories = categories;
+  const selectedCategoryId = activeCategories.some((category) => category.id === categoryId)
+    ? categoryId : activeCategories[0]?.id ?? "";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError("");
     try {
-      await api.createProduct({
-        category_id: categoryId,
+      if (!selectedCategoryId) throw new Error("Hãy tạo danh mục trước khi thêm sản phẩm.");
+      if (!slug.trim() && !slugify(name)) throw new Error("Tên sản phẩm cần có chữ hoặc số.");
+      if (!unit.trim()) throw new Error("Hãy nhập đơn vị bán và nhập kho.");
+      if (Number(price) < 0 || Number(weight) <= 0) throw new Error("Kiểm tra lại giá và cân nặng.");
+      const product = await api.createProduct({
+        category_id: selectedCategoryId,
         name: name.trim(),
         slug: slug.trim() || slugify(name),
         brand: brand.trim() || null,
@@ -302,8 +306,9 @@ function CreateProductForm({
           {
             sku: sku.trim() || `SKU-${Date.now()}`,
             title: variantTitle.trim() || "Mặc định",
-            price: Number(price) || 0,
-            weight_grams: Number(weight) || 500,
+            options: { unit: unit.trim() },
+            price: Number(price),
+            weight_grams: Number(weight),
             is_active: true,
           },
         ],
@@ -313,7 +318,10 @@ function CreateProductForm({
       setBrand("");
       setShortDesc("");
       setSku("");
-      onCreated();
+      setUnit("cái");
+      setPrice("");
+      setWeight("");
+      onCreated(product);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tạo sản phẩm thất bại");
     } finally {
@@ -322,17 +330,22 @@ function CreateProductForm({
   }
 
   return (
-    <form onSubmit={submit} className="h-fit rounded-sm border border-line bg-surface p-4">
-      <h2 className="font-display text-xl text-forest">Thêm sản phẩm</h2>
-      <div className="mt-4 grid gap-3">
-        <label className="text-sm">
+    <div>
+      <p className="text-sm text-ink-muted">Sản phẩm mới lưu ở bản nháp. Sau khi tạo, thêm ảnh và kiểm tra tồn kho trước khi cho hiển thị.</p>
+      <button type="button" onClick={() => setShowCategoryForm(value => !value)} className="mt-3 text-left text-sm font-medium text-forest underline underline-offset-2">{showCategoryForm ? "Đóng tạo danh mục" : "+ Tạo danh mục mới"}</button>
+      {showCategoryForm && <div className="mt-3 rounded-lg border border-line bg-paper p-3"><CategoryCreateForm sortOrder={Math.max(-1, ...categories.map(c => c.sort_order)) + 1} onCreated={async category => { await onCategoryCreated(); setCategoryId(category.id); setShowCategoryForm(false); }} /></div>}
+      <ValidatedForm onSubmit={submit}>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm sm:col-span-2">
           <span className="text-ink-muted">Danh mục</span>
           <select
-            value={categoryId}
+            value={selectedCategoryId}
             onChange={(e) => setCategoryId(e.target.value)}
+            required
             className="mt-1 block w-full rounded-sm border border-line bg-paper px-2 py-1.5"
           >
-            {categories.map((c) => (
+            {!activeCategories.length && <option value="">Chưa có danh mục</option>}
+            {activeCategories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -344,11 +357,11 @@ function CreateProductForm({
           value={name}
           onChange={(v) => {
             setName(v);
-            if (!slug) setSlug(slugify(v));
+            if (!slugEdited) setSlug(slugify(v));
           }}
           required
         />
-        <Field label="Slug" value={slug} onChange={setSlug} />
+        <Field label="Tên trong đường dẫn" value={slug} onChange={value => { setSlug(value); setSlugEdited(Boolean(value)); }} />
         <Field label="Thương hiệu" value={brand} onChange={setBrand} />
         <label className="text-sm">
           <span className="text-ink-muted">Loại thú</span>
@@ -371,26 +384,28 @@ function CreateProductForm({
             onChange={(e) => setStatus(e.target.value as typeof status)}
             className="mt-1 block w-full rounded-sm border border-line bg-paper px-2 py-1.5"
           >
-            <option value="active">Hiện</option>
             <option value="draft">Nháp</option>
+            <option value="active">Hiện</option>
             <option value="hidden">Ẩn</option>
           </select>
         </label>
-        <Field label="Mô tả ngắn" value={shortDesc} onChange={setShortDesc} />
-        <Field label="SKU" value={sku} onChange={setSku} />
+        <div className="sm:col-span-2"><Field label="Mô tả ngắn" value={shortDesc} onChange={setShortDesc} /></div>
+        <Field label="Mã hàng" value={sku} onChange={setSku} />
         <Field label="Tên biến thể" value={variantTitle} onChange={setVariantTitle} />
+        <UnitField value={unit} onChange={setUnit} />
         <Field label="Giá (đ)" value={price} onChange={setPrice} type="number" required />
         <Field label="Cân nặng (g)" value={weight} onChange={setWeight} type="number" required />
       </div>
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       <button
         type="submit"
-        disabled={saving}
+        disabled={saving || !selectedCategoryId}
         className="mt-4 w-full rounded-full bg-forest px-4 py-2 text-sm font-medium text-white hover:bg-forest-deep disabled:opacity-50"
       >
         {saving ? "Đang lưu…" : "Tạo sản phẩm"}
       </button>
-    </form>
+      </ValidatedForm>
+    </div>
   );
 }
 
@@ -475,7 +490,7 @@ function ProductEditDrawer({
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {tab === "info" && (
-        <form onSubmit={saveInfo} className="grid gap-3 sm:grid-cols-2">
+        <ValidatedForm onSubmit={saveInfo} className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">
             <span className="text-ink-muted">Danh mục</span>
             <select
@@ -491,7 +506,7 @@ function ProductEditDrawer({
             </select>
           </label>
           <Field label="Tên" value={name} onChange={setName} required />
-          <Field label="Slug" value={slug} onChange={setSlug} required />
+          <Field label="Tên trong đường dẫn" value={slug} onChange={setSlug} required />
           <Field label="Thương hiệu" value={brand} onChange={setBrand} />
           <label className="text-sm">
             <span className="text-ink-muted">Loại thú</span>
@@ -542,7 +557,7 @@ function ProductEditDrawer({
               {saving ? "Đang lưu…" : "Lưu thông tin"}
             </button>
           </div>
-        </form>
+        </ValidatedForm>
       )}
 
       {tab === "variants" && (
@@ -562,6 +577,7 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
   const [newVariant, setNewVariant] = useState<Partial<VariantCreateInType>>({
     sku: "",
     title: "",
+    options: { unit: "cái" },
     price: 0,
     weight_grams: 500,
     is_active: true,
@@ -571,13 +587,15 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
     setSaving(true);
     setError("");
     try {
-      await api.updateVariant(v.id, {
+      const saved = await api.updateVariant(v.id, {
         sku: v.sku,
         title: v.title,
+        options: { ...v.options, unit: v.options?.unit?.trim() || "cái" },
         price: v.price,
         weight_grams: v.weight_grams,
         is_active: v.is_active,
       });
+      setVariants(current => current.map(item => item.id === saved.id ? saved : item));
       setEditingId(null);
       onSaved();
     } catch (err) {
@@ -592,14 +610,16 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
     setSaving(true);
     setError("");
     try {
-      await api.createVariant(product.id, {
+      const created = await api.createVariant(product.id, {
         sku: newVariant.sku ?? `SKU-${Date.now()}`,
         title: newVariant.title ?? "Mới",
+        options: { ...newVariant.options, unit: newVariant.options?.unit?.trim() || "cái" },
         price: Number(newVariant.price) || 0,
         weight_grams: Number(newVariant.weight_grams) || 500,
         is_active: true,
       });
-      setNewVariant({ sku: "", title: "", price: 0, weight_grams: 500, is_active: true });
+      setVariants(current => [...current, created]);
+      setNewVariant({ sku: "", title: "", options: { unit: "cái" }, price: 0, weight_grams: 500, is_active: true });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tạo thất bại");
@@ -615,8 +635,9 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-forest/5">
             <tr>
-              <th className="px-3 py-2 text-ink-muted">SKU</th>
+              <th className="px-3 py-2 text-ink-muted">Mã hàng</th>
               <th className="px-3 py-2 text-ink-muted">Tên</th>
+              <th className="px-3 py-2 text-ink-muted">Đơn vị</th>
               <th className="px-3 py-2 text-ink-muted">Giá</th>
               <th className="px-3 py-2 text-ink-muted">Tồn</th>
               <th className="px-3 py-2 text-ink-muted">Active</th>
@@ -637,8 +658,9 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
                 <tr key={v.id}>
                   <td className="px-3 py-2 font-mono">{v.sku}</td>
                   <td className="px-3 py-2">{v.title}</td>
+                  <td className="px-3 py-2">{v.options?.unit || "cái"}</td>
                   <td className="px-3 py-2">{formatVnd(v.price)}</td>
-                  <td className="px-3 py-2">{v.cached_available_qty}</td>
+                  <td className="px-3 py-2">{v.cached_available_qty} {v.options?.unit || "cái"}</td>
                   <td className="px-3 py-2">
                     <StatusBadge status={v.is_active ? "active" : "hidden"} />
                   </td>
@@ -658,11 +680,11 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
         </table>
       </div>
 
-      <form onSubmit={createVariant} className="rounded-sm border border-line bg-surface p-4">
+      <ValidatedForm onSubmit={createVariant} className="rounded-sm border border-line bg-surface p-4">
         <h3 className="font-medium">Thêm biến thể</h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Field
-            label="SKU"
+            label="Mã hàng"
             value={newVariant.sku ?? ""}
             onChange={(s) => setNewVariant((v) => ({ ...v, sku: s }))}
             required
@@ -673,6 +695,7 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
             onChange={(s) => setNewVariant((v) => ({ ...v, title: s }))}
             required
           />
+          <UnitField value={newVariant.options?.unit ?? "cái"} onChange={(unit) => setNewVariant((v) => ({ ...v, options: { ...v.options, unit } }))} />
           <Field
             label="Giá"
             value={String(newVariant.price ?? 0)}
@@ -695,7 +718,7 @@ function VariantsPanel({ product, onSaved }: { product: ProductDto; onSaved: () 
         >
           {saving ? "Đang lưu…" : "Thêm biến thể"}
         </button>
-      </form>
+      </ValidatedForm>
     </div>
   );
 }
@@ -728,6 +751,7 @@ function VariantEditRow({
           className="w-full rounded-sm border border-line bg-paper px-2 py-1"
         />
       </td>
+      <td className="px-3 py-2"><input value={v.options?.unit ?? "cái"} onChange={(e) => setV({ ...v, options: { ...v.options, unit: e.target.value } })} className="w-20 rounded-sm border border-line bg-paper px-2 py-1" aria-label="Đơn vị" /></td>
       <td className="px-3 py-2">
         <input
           type="number"
@@ -736,7 +760,7 @@ function VariantEditRow({
           className="w-24 rounded-sm border border-line bg-paper px-2 py-1"
         />
       </td>
-      <td className="px-3 py-2 text-ink-muted">{v.cached_available_qty}</td>
+      <td className="px-3 py-2 text-ink-muted">{v.cached_available_qty} {v.options?.unit || "cái"}</td>
       <td className="px-3 py-2">
         <input
           type="checkbox"
@@ -816,9 +840,9 @@ function ImagesPanel({ product, onSaved }: { product: ProductDto; onSaved: () =>
   }
 
   return (
-    <form onSubmit={save} className="space-y-4">
+    <ValidatedForm onSubmit={save} className="space-y-4">
       <p className="text-sm text-ink-muted">
-        Dán URL hình ảnh (mock / R2). Kéo thả chưa hỗ trợ trong MVP.
+        Dán liên kết đến hình ảnh để thêm ảnh cho sản phẩm.
       </p>
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="space-y-3">
@@ -879,8 +903,16 @@ function ImagesPanel({ product, onSaved }: { product: ProductDto; onSaved: () =>
           {saving ? "Đang lưu…" : "Lưu hình ảnh"}
         </button>
       </div>
-    </form>
+    </ValidatedForm>
   );
+}
+
+function UnitField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <label className="block text-sm">
+    <span className="text-ink-muted">Đơn vị bán / nhập kho</span>
+    <input value={value} onChange={event => onChange(event.target.value)} list="product-units" required maxLength={30} placeholder="cái, chiếc, túi, tải, kg…" className="mt-1 block w-full rounded-sm border border-line bg-paper px-2 py-1.5 outline-none focus:border-moss" />
+    <datalist id="product-units">{["cái", "chiếc", "túi", "tải", "kg", "g", "hộp", "chai", "gói", "bộ"].map(unit => <option key={unit} value={unit} />)}</datalist>
+  </label>;
 }
 
 function Field({

@@ -11,7 +11,7 @@ test.describe("Customer storefront flow", () => {
     const ts = Date.now();
     const guestPhone = `0977${String(ts).slice(-6)}`;
 
-    await page.goto("/");
+    await page.goto("/shop");
     await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(SHOT, "flow-home.png"), fullPage: true });
 
@@ -55,6 +55,8 @@ test.describe("Customer storefront flow", () => {
     await page.locator('input[type="radio"][name="payment"]').nth(0).check({ force: true });
     await page.screenshot({ path: path.join(SHOT, "flow-checkout-filled.png"), fullPage: true });
 
+    await page.getByRole("button", { name: /Kiểm tra tổng tiền/i }).click();
+    await expect(page.getByRole("region", { name: "Chi tiết thanh toán" })).toBeVisible();
     await page.getByRole("button", { name: /Xác nhận đặt hàng/i }).click();
     await expect(page.getByText(/Đặt hàng thành công/i)).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: path.join(SHOT, "flow-checkout-result.png"), fullPage: true });
@@ -98,7 +100,7 @@ test.describe("Customer storefront flow", () => {
   test("VietQR checkout shows payment status", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "once");
     const ts = Date.now();
-    await page.goto("/");
+    await page.goto("/shop");
     await page.locator('a[href^="/p/"]').first().click();
     await page.waitForURL(/\/p\//);
     await page.getByRole("button", { name: /Thêm vào giỏ/i }).click();
@@ -116,12 +118,15 @@ test.describe("Customer storefront flow", () => {
     await fillField("Quận", "Q1");
     await fillField("Phường", "Ben Nghe");
     await fillField("Địa chỉ", "12 QA VietQR");
+    test.skip(!(await page.locator('input[type="radio"][name="payment"]').nth(1).isVisible()), "Online payment is not configured in this environment");
     await page.locator('input[type="radio"][name="payment"]').nth(1).check({ force: true });
+    await page.getByRole("button", { name: /Kiểm tra tổng tiền/i }).click();
+    await expect(page.getByRole("region", { name: "Chi tiết thanh toán" })).toBeVisible();
     await page.getByRole("button", { name: /Xác nhận đặt hàng/i }).click();
     await expect(page.getByText(/Đặt hàng thành công/i)).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: path.join(SHOT, "flow-vietqr-result.png"), fullPage: true });
     const body = await page.innerText("body");
     expect(/VietQR/i.test(body)).toBeTruthy();
-    expect(/unpaid|pending|chưa|QR/i.test(body)).toBeTruthy();
+    expect(/chờ|thanh toán|QR/i.test(body)).toBeTruthy();
   });
 });

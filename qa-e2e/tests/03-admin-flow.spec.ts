@@ -6,7 +6,7 @@ import { loginAs, ownerCreds } from "../helpers/auth";
 const SHOT = path.join("D:", "code", "PS_project", "test-reports", "screenshots");
 
 async function dismissTotpIfAny(page: import("@playwright/test").Page) {
-  const dialog = page.getByText(/Xác thực TOTP/i);
+  const dialog = page.getByText(/Xác minh bảo mật/i);
   if (await dialog.isVisible().catch(() => false)) {
     await page.getByRole("button", { name: /Hủy/i }).click().catch(() => {});
     return true;
@@ -25,6 +25,7 @@ test.describe("Admin owner UI", () => {
 
     for (const href of [
       "/admin",
+      "/admin/shop",
       "/admin/orders",
       "/admin/inventory-lots",
       "/admin/products",
@@ -75,7 +76,7 @@ test.describe("Admin owner UI", () => {
     }
 
     await fillInForm("Tên sản phẩm", QA_PRODUCT);
-    await fillInForm("^Slug$", `qa-e2e-product-${ts}`);
+    await fillInForm("^Tên trong đường dẫn$", `qa-e2e-product-${ts}`);
     await fillInForm("SKU", `QA-E2E-${ts}`);
     await fillInForm("Tên biến thể", "QA Default");
     // price/weight already have defaults

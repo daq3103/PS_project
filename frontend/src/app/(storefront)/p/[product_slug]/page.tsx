@@ -1,3 +1,4 @@
+import { pageMetadata, productDescription, productImage, productStructuredData } from "@/lib/seo";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ProductCard } from "@/components/ProductCard";
@@ -10,13 +11,13 @@ const PET_LABEL: Record<string, string> = {
   both: "Cho chó & mèo",
 };
 
-function coverFor(slug: string, petType: string): string {
-  if (petType === "cat" || slug.includes("pate")) return "/brand/cat-food.jpg";
-  if (slug.includes("vong") || slug.includes("collar")) {
-    return "/brand/cat-accessories.jpg";
-  }
-  if (slug.includes("hat") || slug.includes("food")) return "/brand/cat-food.jpg";
-  return "/brand/cat-accessories.jpg";
+export async function generateMetadata({params}: {params: Promise<{product_slug: string}>}) {
+  const {product_slug} = await params;
+  try {
+    const product = await api.getProductBySlug(product_slug);
+    if (product.status !== "active") return {robots: {index: false}};
+    return pageMetadata(product.seo_title || product.name, productDescription(product), `/p/${product.slug}`);
+  } catch { return {title: "Không tìm thấy sản phẩm", robots: {index: false}}; }
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ product_slug: string }> }) {
@@ -32,6 +33,7 @@ export default async function ProductPage({ params }: { params: Promise<{ produc
   const initialStock = product.variants.map((v) => ({
     variant_id: v.id,
     title: v.title,
+    unit: v.options?.unit || "cái",
     cached_available_qty: v.cached_available_qty,
     nearest_expiry_date: v.nearest_expiry_date,
     price: v.price,
@@ -53,11 +55,14 @@ export default async function ProductPage({ params }: { params: Promise<{ produc
   const minWeight = weights.length ? Math.min(...weights) : 0;
   const maxWeight = weights.length ? Math.max(...weights) : 0;
 
+  const structuredData = productStructuredData(product);
   return (
     <article className="grid gap-10 md:grid-cols-2">
+      {structuredData && <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(structuredData).replace(/</g, "\\u003c")}} />}
       <div className="group relative aspect-[4/5] overflow-hidden rounded-sm bg-forest/10 shadow-sm transition-shadow duration-200 hover:shadow-md">
         <Image
-          src={coverFor(product.slug, product.pet_type)}
+          src={productImage(product)}
+          unoptimized
           alt={product.name}
           fill
           priority

@@ -34,6 +34,8 @@ def payload(**changes):
 
 
 def test_privacy_templates_and_metric_validation():
+    assert service.normalize_page("/?source=home") == ("/", "platform")
+    assert service.normalize_page("/shop/") == ("/shop", "shop")
     assert service.normalize_page("/p/private-phone?token=secret") == ("/p/[product]", "shop")
     assert service.normalize_page("/tram-cuu-ho/meo") == ("/tram-cuu-ho/[post]", "rescue")
     for path in ("/admin/orders", "//evil.test", "/unknown/personal", "https://evil.test"):

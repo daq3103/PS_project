@@ -1,8 +1,8 @@
 "use client";
+import { DeleteRecordButton } from "@/components/admin/DeleteRecordButton";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import {
   api,
   type OrderDetailOut,
@@ -35,6 +35,8 @@ function ShipmentForm({
 }) {
   const [packageCount, setPackageCount] = useState("1");
   const [weightGrams, setWeightGrams] = useState("");
+  const [carrier, setCarrier] = useState("ghn");
+  const [tracking, setTracking] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,11 +45,12 @@ function ShipmentForm({
     setError("");
     try {
       const weight = Number(weightGrams);
-      await api.adminCreateShipment(order.id, {
+      await api.manualShipment(order.id, {
+        carrier_code: carrier,
+        tracking_code: tracking.trim(),
         package_count: Number(packageCount) || 1,
-        total_weight_grams: weight > 0 ? weight : undefined,
+        total_weight_grams: weight,
       });
-      await new Promise((r) => setTimeout(r, 800));
       onCreated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Tạo vận đơn thất bại");
@@ -58,7 +61,10 @@ function ShipmentForm({
 
   return (
     <div className="rounded-sm border border-line bg-surface p-4">
-      <h4 className="font-medium">Tạo vận đơn</h4>
+      <h4 className="font-medium">Ghi nhận vận đơn</h4>
+      <p className="mt-1 text-xs text-ink-muted">Tạo đơn giao hàng với hãng vận chuyển rồi nhập mã tại đây.</p>
+      <label className="mt-3 block text-sm">Hãng vận chuyển<select value={carrier} onChange={e => setCarrier(e.target.value)} className="mt-1 block w-full rounded-lg border border-line bg-paper p-2"><option value="ghn">Giao Hàng Nhanh</option><option value="ghtk">Giao Hàng Tiết Kiệm</option><option value="viettel_post">Viettel Post</option><option value="other">Đơn vị khác</option></select></label>
+      <label className="mt-3 block text-sm">Mã vận đơn<input value={tracking} maxLength={100} onChange={e => setTracking(e.target.value)} className="mt-1 block w-full rounded-lg border border-line bg-paper p-2" /></label>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="text-sm">
           <span className="text-ink-muted">Số kiện</span>
@@ -78,7 +84,7 @@ function ShipmentForm({
             min={1}
             value={weightGrams}
             onChange={(e) => setWeightGrams(e.target.value)}
-            placeholder="auto"
+            placeholder="Cả hàng và bao bì"
             className="mt-1 block w-full rounded-sm border border-line bg-paper px-2 py-1.5"
           />
         </label>
@@ -86,11 +92,11 @@ function ShipmentForm({
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       <button
         type="button"
-        disabled={busy || disabled}
+        disabled={busy || disabled || !tracking.trim() || Number(weightGrams) <= 0}
         onClick={() => void submit()}
         className="mt-3 rounded-full bg-forest px-4 py-1.5 text-sm font-medium text-white hover:bg-forest-deep disabled:opacity-50"
       >
-        {busy ? "Đang tạo…" : "Tạo vận đơn"}
+        {busy ? "Đang lưu…" : "Lưu vận đơn"}
       </button>
     </div>
   );
@@ -111,6 +117,15 @@ function OrderDetailDrawer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { confirm, dialog } = useConfirm();
+  const [deliveryNote, setDeliveryNote] = useState("");
+  const [codReceived, setCodReceived] = useState(false);
+  const [codNote, setCodNote] = useState("");
+
+  useEffect(() => {
+    setDeliveryNote("");
+    setCodReceived(false);
+    setCodNote("");
+  }, [orderId]);
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -133,8 +148,8 @@ function OrderDetailDrawer({
     let reason: string | undefined;
     if (needsReason) {
       const ok = await confirm({
-        title: `Xác nhận ${label.toLowerCase()}`,
-        message: `Bạn có chắc muốn ${label.toLowerCase()} đơn này?`,
+        title: label === "Xác nhận" ? "Xác nhận đơn hàng" : label,
+        message: `Bạn có chắc muốn ${label.toLowerCase().replace(/ đơn$/, "")} đơn hàng này?`,
         variant: "danger",
         confirmText: label,
       });
@@ -142,7 +157,7 @@ function OrderDetailDrawer({
       reason = window.prompt("Lý do (tuỳ chọn):") ?? undefined;
     } else {
       const ok = await confirm({
-        title: `Xác nhận ${label.toLowerCase()}`,
+        title: label === "Xác nhận" ? "Xác nhận đơn hàng" : label,
         message: `Thực hiện ${label.toLowerCase()} cho đơn ${order?.order_code ?? ""}?`,
         confirmText: label,
       });
@@ -177,7 +192,7 @@ function OrderDetailDrawer({
               <p className="text-xs text-ink-muted">Địa chỉ giao</p>
               <p className="text-sm">
                 {order.shipping_address
-                  ? `${order.shipping_address.street_address ?? order.shipping_address.street ?? ""}, ${order.shipping_address.ward_name ?? order.shipping_address.ward ?? ""}, ${order.shipping_address.district_name ?? order.shipping_address.district ?? ""}, ${order.shipping_address.province_name ?? order.shipping_address.province ?? ""}`
+                  ? order.shipping_address.full_address ?? `${order.shipping_address.street_address ?? order.shipping_address.street ?? ""}, ${order.shipping_address.ward_name ?? order.shipping_address.ward ?? ""}, ${order.shipping_address.district_name ?? order.shipping_address.district ?? ""}, ${order.shipping_address.province_name ?? order.shipping_address.province ?? ""}`
                   : "—"}
               </p>
             </div>
@@ -296,6 +311,8 @@ function OrderDetailDrawer({
                 onClick={() => void act("Giao hàng", () => api.adminShipOrder(order.id))}
               />
             )}
+            {order.status === "shipped" && <div className="w-full rounded-lg border border-line bg-surface p-3"><p className="text-sm font-medium">Xác nhận giao thành công</p><p className="mt-1 text-xs text-ink-muted">Chỉ dùng sau khi kiểm tra trạng thái với hãng vận chuyển hoặc người giao.</p><label className="mt-2 block text-sm">Căn cứ xác nhận giao<input value={deliveryNote} onChange={e => setDeliveryNote(e.target.value)} placeholder="Ví dụ: người giao báo đã giao, mã vận đơn…" minLength={10} maxLength={500} className="mt-1 block w-full rounded border border-line p-2" /></label>{order.payment_method === "cod" && <><label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={codReceived} onChange={e => setCodReceived(e.target.checked)} />Shop đã thực nhận đủ {formatVnd(order.total_amount)} tiền COD</label>{codReceived && <label className="mt-2 block text-sm">Căn cứ shop nhận tiền<input value={codNote} onChange={e => setCodNote(e.target.value)} placeholder="Ví dụ: nhân viên giao nộp tiền mặt, mã chuyển khoản…" maxLength={500} className="mt-1 block w-full rounded border border-line p-2" /></label>}<p className="mt-1 text-xs text-ink-muted">Nếu tiền còn ở người giao hoặc hãng vận chuyển, để trống ô này. Có thể đối soát sau.</p></>}<button type="button" disabled={deliveryNote.trim().length < 10 || (codReceived && codNote.trim().length < 10)} onClick={() => void act("Đã giao", () => api.confirmManualDelivery(order.id, deliveryNote.trim(), codReceived, codNote.trim()))} className="mt-3 rounded-full bg-forest px-4 py-2 text-sm text-white disabled:opacity-50">{codReceived ? "Đã giao và đã nhận COD" : "Đánh dấu đã giao"}</button></div>}
+            {order.status === "delivered" && order.payment_method === "cod" && order.payment_status === "unpaid" && <div className="w-full rounded-lg border border-honey/40 bg-honey/5 p-3"><p className="text-sm font-medium">COD chờ shop nhận tiền</p><p className="mt-1 text-xs text-ink-muted">Chỉ xác nhận khi tiền đã thực về shop. Đơn sẽ chuyển sang mục Đã hoàn tất.</p><label className="mt-2 block text-sm">Căn cứ shop nhận tiền<input value={codNote} onChange={e => setCodNote(e.target.value)} placeholder="Người giao nộp tiền, mã chuyển khoản hoặc biên bản đối soát…" maxLength={500} className="mt-1 block w-full rounded border border-line p-2" /></label><button type="button" disabled={codNote.trim().length < 10} onClick={() => void act("Đã nhận COD", () => api.recordCodReceipt(order.id, codNote.trim()))} className="mt-3 rounded-full bg-forest px-4 py-2 text-sm text-white disabled:opacity-50">Xác nhận đã nhận COD</button></div>}
             {order.status !== "shipped" && order.status !== "delivered" && order.status !== "cancelled" && (
               <ActionBtn
                 label="Huỷ đơn"
@@ -347,6 +364,13 @@ export default function AdminOrdersPage() {
   const [q, setQ] = useState(searchParams.get("q") ?? "");
   const [dateFrom, setDateFrom] = useState(searchParams.get("date_from") ?? "");
   const [dateTo, setDateTo] = useState(searchParams.get("date_to") ?? "");
+  const [reportMetric, setReportMetric] = useState(searchParams.get("report_metric") ?? "");
+  const [view, setView] = useState<"active" | "closed" | "all">(() => {
+    const requested = searchParams.get("view");
+    if (requested === "active" || requested === "closed" || requested === "all") return requested;
+    return searchParams.get("report_metric") || searchParams.get("status") ? "all" : "active";
+  });
+  const [offset, setOffset] = useState(0);
   const [openOrderId, setOpenOrderId] = useState<string | null>(searchParams.get("open"));
 
   const { confirm, dialog } = useConfirm();
@@ -356,12 +380,15 @@ export default function AdminOrdersPage() {
     setError("");
     try {
       const data = await api.adminListOrders({
+        view,
         status: status || undefined,
         payment_method: payment || undefined,
         q: q || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        report_metric: reportMetric || undefined,
         limit: 50,
+        offset,
       });
       setOrders(data);
     } catch (e) {
@@ -369,7 +396,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, payment, q, dateFrom, dateTo]);
+  }, [view, status, payment, q, dateFrom, dateTo, reportMetric, offset]);
 
   useEffect(() => {
     void load();
@@ -386,7 +413,7 @@ export default function AdminOrdersPage() {
 
   async function rowAction(label: string, id: string, fn: () => Promise<unknown>) {
     const ok = await confirm({
-      title: `Xác nhận ${label.toLowerCase()}`,
+      title: label === "Xác nhận" ? "Xác nhận đơn hàng" : label,
       message: `Thực hiện ${label.toLowerCase()} cho đơn đã chọn?`,
       confirmText: label,
     });
@@ -400,6 +427,7 @@ export default function AdminOrdersPage() {
   }
 
   const columns: Column<OrderOut>[] = [
+    { key: "delete", header: "", cell: (o) => <DeleteRecordButton kind="orders" id={o.id} onDeleted={load} /> },
     {
       key: "code",
       header: "Mã đơn",
@@ -510,23 +538,27 @@ export default function AdminOrdersPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-forest">Đơn hàng</h1>
-          <p className="mt-1 text-sm text-ink-muted">Xác nhận, đóng gói, vận chuyển và theo dõi.</p>
+          <p className="mt-1 text-sm text-ink-muted">Đơn đang xử lý và COD chưa nhận tiền ở mục Cần xử lý. Đơn hoàn tất vẫn tra cứu được.</p>
         </div>
-        <Link
-          href="/admin/orders"
+        <button
+          type="button"
+          onClick={() => { setStatus(""); setPayment(""); setQ(""); setDateFrom(""); setDateTo(""); setReportMetric(""); setView("active"); setOffset(0); router.replace("/admin/orders", {scroll:false}); }}
           className="rounded-full border border-line px-4 py-1.5 text-sm text-ink-muted hover:border-forest hover:text-forest"
         >
           Xoá bộ lọc
-        </Link>
+        </button>
       </div>
 
+      <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Nhóm đơn hàng">{([['active','Cần xử lý'],['closed','Đã hoàn tất'],['all','Tất cả']] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => { setView(value); setOffset(0); updateSearch({view:value}); }} className={`rounded-full border px-4 py-2 text-sm ${view === value ? "border-forest bg-forest text-white" : "border-line text-ink hover:border-forest/40 hover:bg-forest/5"}`}>{label}</button>)}</div>
       <FilterBar>
         <FilterField label="Trạng thái">
           <select
             value={status}
             onChange={(e) => {
               setStatus(e.target.value);
-              updateSearch({ status: e.target.value });
+              setView("all");
+              setOffset(0);
+              updateSearch({ status: e.target.value, view: "all" });
             }}
             className="rounded-sm border border-line bg-paper px-2 py-1.5"
           >
@@ -589,13 +621,17 @@ export default function AdminOrdersPage() {
       {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
       <div className="mt-4">
+        {reportMetric && <p className="mb-3 text-sm text-forest">Chi tiết từ báo cáo bán hàng: {({all:"Tổng số đơn",cancelled:"Đơn đã hủy",ordered:"Đơn không hủy",delivered:"Đơn đã giao",paid:"Đơn đã thanh toán",discount:"Đơn có giảm giá"} as Record<string,string>)[reportMetric] ?? reportMetric}</p>}
         <DataTable
           columns={columns}
           rows={orders}
           keyExtractor={(o) => o.id}
+          onRowClick={(o) => { setOpenOrderId(o.id); updateSearch({ open: o.id }); }}
+          rowAriaLabel={(o) => `Mở chi tiết đơn ${o.order_code}`}
           loading={loading}
           empty="Không có đơn hàng phù hợp."
         />
+        <div className="mt-4 flex items-center gap-3 text-sm"><button type="button" disabled={offset === 0 || loading} onClick={() => setOffset(value => Math.max(0, value - 50))} className="rounded-full border border-line px-4 py-2 disabled:opacity-40">Trang trước</button><span>Trang {Math.floor(offset / 50) + 1}</span><button type="button" disabled={orders.length < 50 || loading} onClick={() => setOffset(value => value + 50)} className="rounded-full border border-line px-4 py-2 disabled:opacity-40">Trang sau</button></div>
       </div>
     </div>
   );

@@ -2,8 +2,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, type CommunityPostCreateIn, type CommunityPostOwnerOut } from "@/lib/api-client";
+import { api, type CommunityPostCreateIn, type CommunityPostOwnerOut, type PetDetails, type PetOptions } from "@/lib/api-client";
 import { Turnstile } from "./Turnstile";
+import { canManagePlatform } from "@/lib/admin-navigation";
+import { PetFields } from "./PetFields";
 
 const input = "mt-1 w-full rounded-sm border border-line bg-paper px-3 py-2 text-sm";
 type Upload = { upload_id: string; url: string };
@@ -11,6 +13,7 @@ type Upload = { upload_id: string; url: string };
 export function PostForm({ editId, adoption = false, admin = false }: { editId?: string; adoption?: boolean; admin?: boolean }) {
   const router = useRouter();
   const [post, setPost] = useState<CommunityPostOwnerOut | null>(null);
+  const [petOptions, setPetOptions] = useState<PetOptions | null>(null);
   const [locations, setLocations] = useState<{ id: number; name: string }[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [kind, setKind] = useState("lost_pet");
@@ -26,13 +29,13 @@ export function PostForm({ editId, adoption = false, admin = false }: { editId?:
     let active = true;
     void (async () => {
       try {
-        const [me, catalog, config] = await Promise.all([api.me(), api.communityLocations(), api.communityConfig()]);
+        const [me, catalog, config, pets] = await Promise.all([api.me(), api.communityLocations(), api.communityConfig(), api.communityPetOptions()]);
         if (!me.user) { router.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
         if (!config.enabled) throw new Error("Trạm cứu hộ đang tạm ngưng");
-        if (adoption && !["owner", "cskh_staff"].includes(me.user.role)) throw new Error("Bạn không có quyền đăng tin nhận nuôi");
+        if (adoption && !canManagePlatform(me.user) && !me.user.staff_permissions?.includes("rescue_manage")) throw new Error("Bạn không có quyền đăng tin nhận nuôi");
         const item = editId ? (admin ? await api.adminCommunityPost(editId) : await api.getMyCommunityPost(editId)) : null;
         if (!active) return;
-        setPost(item); setKind(item?.post_type ?? (adoption ? "adoption" : "lost_pet"));
+        setPost(item); setPetOptions(pets); setKind(item?.post_type ?? (adoption ? "adoption" : "lost_pet"));
         setUploads(item?.images ?? []); setLocations(catalog.provinces); setSiteKey(config.turnstile_site_key);
         setRequestKey(crypto.randomUUID()); setLoaded(true);
       } catch (e) { if (active) setError(e instanceof Error ? e.message : "Không tải được biểu mẫu"); }
@@ -67,6 +70,14 @@ export function PostForm({ editId, adoption = false, admin = false }: { editId?:
       idempotency_key: requestKey, post_type: kind as CommunityPostCreateIn["post_type"],
       title: text("title"), description: nullable("description"), pet_type: text("pet_type") as "dog" | "cat" | "other",
       breed: nullable("breed"), color: nullable("color"), province_id: province?.id ?? 0, province_name: province?.name ?? "",
+      pet_details: {
+        colors: form.getAll("colors").map(String),
+        coat_length: text("coat_length") as PetDetails["coat_length"],
+        pattern: text("pattern") as PetDetails["pattern"], sex: text("sex") as PetDetails["sex"],
+        size: text("size") as PetDetails["size"],
+        age_months: text("age_months") ? Number(text("age_months")) : null,
+        weight_kg: text("weight_kg") ? Number(text("weight_kg")) : null, markings: nullable("markings"),
+      },
       district_name: nullable("district_name"), ward_name: nullable("ward_name"), location_detail: nullable("location_detail"),
       contact_phone: text("contact_phone"), contact_zalo: nullable("contact_zalo"), contact_facebook: nullable("contact_facebook"),
       last_seen_at: kind === "lost_pet" && event ? new Date(event).toISOString() : null,
@@ -83,7 +94,8 @@ export function PostForm({ editId, adoption = false, admin = false }: { editId?:
         else await api.updateCommunityPost(post.id, { ...values, version: post.version });
       } else if (adoption) await api.adminCreateAdoptionPost(data);
       else await api.createCommunityPost(data);
-      router.push(adoption || admin ? "/admin/community" : "/account/community"); router.refresh();
+      if (adoption || admin) { router.push("/admin/community"); router.refresh(); }
+      else window.location.assign(`/account/community?${post ? "updated" : "created"}=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được tin"); setToken(""); setResetKey(v => v + 1);
       // Preserve key for an identical network retry. A changed form gets a new key through onChange below.
@@ -94,21 +106,15 @@ export function PostForm({ editId, adoption = false, admin = false }: { editId?:
     <h1 className="font-display text-3xl text-forest">{post ? "Sửa tin cứu hộ" : adoption ? "Đăng tin nhận nuôi" : "Đăng tin cứu hộ"}</h1>
     <p className="text-sm text-ink-muted">{adoption ? "Mỗi tin dành cho một bé. Hồ sơ nhận nuôi được quản lý riêng." : "Tin sẽ hiển thị sau khi được duyệt. Sửa nội dung sẽ cần duyệt lại."}</p>
     {error && <p role="alert" className="text-danger">{error}</p>}
-    {!adoption && !post && <label className="block">Loại tin<select className={input} value={kind} onChange={e => setKind(e.target.value)}><option value="lost_pet">Tìm pet thất lạc</option><option value="found_pet">Nhặt được pet, tìm chủ</option></select></label>}
+    {!adoption && !post && <label className="block">Loại tin<select className={input} value={kind} onChange={e => setKind(e.target.value)}><option value="lost_pet">Tìm thú cưng thất lạc</option><option value="found_pet">Tìm chủ cho bé nhặt được</option></select></label>}
     <label className="block">Tiêu đề<input name="title" required minLength={5} maxLength={255} defaultValue={post?.title} className={input} /></label>
     <label className="block">Mô tả<textarea name="description" rows={4} maxLength={3000} defaultValue={post?.description ?? ""} className={input} /></label>
-    <div className="grid gap-4 sm:grid-cols-3">
-      <label>Loài<select name="pet_type" defaultValue={post?.pet_type ?? "dog"} className={input}><option value="dog">Chó</option><option value="cat">Mèo</option><option value="other">Khác</option></select></label>
-      <label>Giống<input name="breed" maxLength={100} defaultValue={post?.breed ?? ""} className={input} /></label>
-      <label>Màu sắc<input name="color" maxLength={100} defaultValue={post?.color ?? ""} className={input} /></label>
-    </div>
+    {petOptions && <PetFields post={post} options={petOptions} />}
     <label className="block">Khu vực<select name="province_id" required defaultValue={post?.province_id ?? ""} className={input}><option value="">Chọn khu vực</option>{locations.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
     <div className="grid gap-4 sm:grid-cols-2"><label>Khu vực chi tiết<input name="district_name" maxLength={100} defaultValue={post?.district_name ?? ""} className={input} /></label><label>Phường / xã<input name="ward_name" maxLength={100} defaultValue={post?.ward_name ?? ""} className={input} /></label></div>
     <label className="block">Địa điểm công khai<input name="location_detail" maxLength={500} defaultValue={post?.location_detail ?? ""} className={input} /><span className="text-xs text-ink-muted">Chỉ nhập địa điểm bạn muốn công khai trên bài.</span></label>
     {kind !== "adoption" && <label className="block">{kind === "lost_pet" ? "Lần thấy cuối" : "Thời điểm nhặt được"}<input type="datetime-local" name="event_at" className={input} defaultValue={localDate(post?.last_seen_at ?? post?.found_at)} /></label>}
     {kind === "adoption" && <fieldset className="space-y-4 rounded-sm border border-line p-4"><legend>Thông tin nhận nuôi</legend>
-      <label className="block">Tuổi ước tính (tháng)<input type="number" min={0} max={480} name="age_months" defaultValue={post?.adoption_meta.age_months ?? ""} className={input} /></label>
-      <label className="block">Kích thước<select name="size" defaultValue={post?.adoption_meta.size ?? "unknown"} className={input}><option value="unknown">Chưa biết</option><option value="small">Nhỏ</option><option value="medium">Vừa</option><option value="large">Lớn</option></select></label>
       {(["vaccinated", "neutered"] as const).map(name => <label key={name} className="block">{name === "vaccinated" ? "Tiêm phòng" : "Triệt sản"}<select name={name} defaultValue={post?.adoption_meta[name] == null ? "" : post.adoption_meta[name] ? "yes" : "no"} className={input}><option value="">Chưa biết</option><option value="yes">Đã thực hiện</option><option value="no">Chưa thực hiện</option></select></label>)}
       <label className="block">Sức khỏe<textarea name="health" maxLength={1000} defaultValue={post?.adoption_meta.health ?? ""} className={input} /></label>
       <label className="block">Điều kiện nhận nuôi<textarea name="requirements" maxLength={1000} defaultValue={post?.adoption_meta.requirements ?? ""} className={input} /></label>
@@ -117,7 +123,10 @@ export function PostForm({ editId, adoption = false, admin = false }: { editId?:
     <label className="block">Zalo<input name="contact_zalo" type="tel" maxLength={20} defaultValue={post?.contact_zalo ?? ""} className={input} /></label>
     <label className="block">Facebook<input name="contact_facebook" type="url" maxLength={255} placeholder="https://www.facebook.com/..." defaultValue={post?.contact_facebook ?? ""} className={input} /></label>
     <label className="block">Ảnh ({uploads.length}/5)<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploading || busy || uploads.length >= 5} onChange={e => void upload(e.target.files)} className={input} /></label>
-    <div className="flex flex-wrap gap-3">{uploads.map(u => <div key={u.upload_id}><img src={u.url} alt="Ảnh đính kèm" className="h-24 w-24 rounded-sm object-cover" /><button type="button" onClick={() => { setUploads(old => old.filter(i => i.upload_id !== u.upload_id)); setRequestKey(crypto.randomUUID()); }} className="text-sm text-danger">Xóa ảnh</button></div>)}</div>
+    <p className="text-sm text-ink-muted">Nên có ảnh rõ mặt, toàn thân và dấu hiệu đặc biệt. Ảnh đầu tiên sẽ làm ảnh đại diện.</p>
+    <div className="flex flex-wrap gap-3">{uploads.map((u, index) => <div key={u.upload_id} className="w-28 space-y-1"><img src={u.url} alt={`Ảnh đính kèm ${index + 1}`} className="h-24 w-28 rounded-sm object-cover" />
+      {index === 0 ? <span className="block text-xs text-forest">Ảnh đại diện</span> : <button type="button" disabled={busy || uploading} onClick={() => { setUploads(old => [u, ...old.filter(i => i.upload_id !== u.upload_id)]); setRequestKey(crypto.randomUUID()); }} className="block text-xs text-forest underline">Làm ảnh đại diện</button>}
+      <button type="button" disabled={busy || uploading} onClick={() => { setUploads(old => old.filter(i => i.upload_id !== u.upload_id)); setRequestKey(crypto.randomUUID()); }} className="text-sm text-danger">Xóa ảnh</button></div>)}</div>
     {!post && !adoption && <Turnstile siteKey={siteKey} onToken={setToken} resetKey={resetKey} />}
     <button disabled={busy || uploading || (!post && !adoption && !!siteKey && !token)} className="rounded-full bg-forest px-6 py-3 text-white disabled:opacity-50">{uploading ? "Đang tải ảnh…" : busy ? "Đang lưu…" : "Lưu tin"}</button>
   </form>;

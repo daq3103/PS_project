@@ -13,7 +13,7 @@ from typing import Any
 from app.modules.payment.base import PaymentProvider
 
 _WEBHOOK_TOLERANCE_SEC = 5 * 60
-_AMOUNT_TOLERANCE = 1000
+_AMOUNT_TOLERANCE = 0
 
 
 def amount_tolerance() -> int:

@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { api, type CommunityPostAdminOut, type CommunityAuditOut } from "@/lib/api-client";
+import { api, type CommunityPostAdminOut, type CommunityAuditOut, type PetOptions } from "@/lib/api-client";
+import { PetDetailsView } from "@/components/community/PetDetailsView";
+import { PhotoGallery } from "@/components/community/PhotoGallery";
 import { CommunityAdminNav } from "@/components/community/AdminNav";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { Drawer } from "@/components/admin/Drawer";
 import { FilterBar, FilterField } from "@/components/admin/FilterBar";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
+import { auditActionLabels, auditStatusLabels } from "@/components/community/labels";
 
 const MOD_LABELS: Record<string, string> = {
   pending: "Chờ duyệt",
@@ -42,11 +45,14 @@ export default function AdminCommunityPage() {
   const [selected, setSelected] = useState<CommunityPostAdminOut | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [history, setHistory] = useState<CommunityAuditOut[]>([]);
+  const [petOptions, setPetOptions] = useState<PetOptions | null>(null);
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
   const { confirm, dialog } = useConfirm();
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     setLoading(true);
     setError("");
     try {
@@ -59,17 +65,20 @@ export default function AdminCommunityPage() {
         limit: 50,
         offset,
       });
-      setPosts(data);
+      if (currentRequest === requestId.current) setPosts(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không tải được");
+      if (currentRequest === requestId.current) setError(e instanceof Error ? e.message : "Không tải được");
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
   }, [filters, offset]);
 
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => void load(), 300);
+    return () => { window.clearTimeout(timer); ++requestId.current; };
   }, [load]);
+
+  useEffect(() => { void api.communityPetOptions().then(setPetOptions).catch(() => setPetOptions(null)); }, []);
 
   useEffect(() => {
     setHistory([]);
@@ -89,7 +98,9 @@ export default function AdminCommunityPage() {
     if (!ok) return;
     setBusy(true);
     try {
-      await api.adminModerateCommunityPost(id, { action, reason, version: posts.find(p => p.id === id)?.version });
+      const updated = await api.adminModerateCommunityPost(id, { action, reason, version: posts.find(p => p.id === id)?.version });
+      ++requestId.current;
+      setPosts(old => old.flatMap(post => post.id !== id ? [post] : filters.moderation_status && filters.moderation_status !== updated.moderation_status ? [] : [updated]));
       await load();
       if (selected?.id === id) setSelected(null);
     } catch (e) {
@@ -240,7 +251,10 @@ export default function AdminCommunityPage() {
         columns={columns}
         rows={posts}
         keyExtractor={(row) => row.id}
+        onRowClick={(row) => { setSelected(row); setDrawerOpen(true); }}
+        rowAriaLabel={(row) => `Mở tin ${row.title}`}
         loading={loading}
+        empty={error ? "Chưa tải được tin. Vui lòng thử lại." : "Không có kết quả phù hợp."}
       />
       <div className="flex gap-3"><button disabled={!offset || loading} onClick={() => setOffset(v => Math.max(0, v - 50))} className="rounded-full border px-4 py-2 disabled:opacity-40">Trang trước</button><button disabled={posts.length < 50 || loading} onClick={() => setOffset(v => v + 50)} className="rounded-full border px-4 py-2 disabled:opacity-40">Trang sau</button></div>
 
@@ -255,10 +269,11 @@ export default function AdminCommunityPage() {
             />
             <p>{selected.description}</p>
             <Link href={`/admin/community/${selected.id}/edit`} className="text-forest underline">Sửa nội dung</Link>
-            <div className="flex flex-wrap gap-2">{selected.images.map(image => <img key={image.upload_id} src={image.url} alt={selected.title} className="h-36 w-36 rounded-sm object-cover" />)}</div>
+            <PhotoGallery images={selected.images} title={selected.title} />
+            {petOptions && <PetDetailsView post={selected} options={petOptions} />}
             {selected.moderation_reason && <p>Lý do kiểm duyệt: {selected.moderation_reason}</p>}
             <div className="grid gap-2 text-ink-muted">
-              <p>Loài: {selected.pet_type}</p>
+              <p>Loài: {({ dog: "Chó", cat: "Mèo", other: "Khác" })[selected.pet_type]}</p>
               <p>Giống: {selected.breed ?? "—"}</p>
               <p>Màu: {selected.color ?? "—"}</p>
               <p>Địa điểm: {selected.province_name}</p>
@@ -309,7 +324,7 @@ export default function AdminCommunityPage() {
                 </button>
               )}
             </div>
-            <section className="space-y-2 border-t border-line pt-4"><h3 className="font-medium">Lịch sử xử lý</h3>{history.map(item => <div key={item.id} className="rounded-sm bg-paper p-2 text-xs"><p>{new Date(item.created_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · {item.action}</p><p>{item.old_status} → {item.new_status}</p>{item.reason && <p>{item.reason}</p>}</div>)}</section>
+            <section className="space-y-2 border-t border-line pt-4"><h3 className="font-medium">Lịch sử xử lý</h3>{history.map(item => <div key={item.id} className="rounded-sm bg-paper p-2 text-xs"><p>{new Date(item.created_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · {auditActionLabels[item.action] ?? "Cập nhật thông tin"}</p>{(item.old_status || item.new_status) && <p>{item.old_status ? auditStatusLabels[item.old_status] ?? "Trạng thái trước" : "Chưa có"} → {item.new_status ? auditStatusLabels[item.new_status] ?? "Đã cập nhật" : "Chưa có"}</p>}{item.reason && <p>{item.reason}</p>}</div>)}</section>
           </div>
         )}
       </Drawer>

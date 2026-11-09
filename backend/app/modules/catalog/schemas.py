@@ -33,6 +33,7 @@ class CategoryCreate(BaseModel):
     parent_id: UUID | None = None
     sort_order: int = 0
     is_active: bool = True
+    show_in_nav: bool = False
 
 
 class CategoryUpdate(BaseModel):
@@ -41,6 +42,7 @@ class CategoryUpdate(BaseModel):
     parent_id: UUID | None = None
     sort_order: int | None = None
     is_active: bool | None = None
+    show_in_nav: bool | None = None
 
 
 class CategoryOut(BaseModel):
@@ -52,6 +54,7 @@ class CategoryOut(BaseModel):
     slug: str
     sort_order: int
     is_active: bool
+    show_in_nav: bool
     created_at: datetime
 
 

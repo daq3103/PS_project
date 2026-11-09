@@ -28,7 +28,7 @@ export default function Page() {
     catch (e) { setError(e instanceof Error ? e.message : "Thao tác thất bại"); }
     finally { setBusy(""); }
   }
-  return <div className="space-y-4"><CommunityAdminNav /><h1 className="font-display text-2xl text-forest">Hồ sơ nhận nuôi</h1>
+  return <div className="space-y-4"><CommunityAdminNav /><h1 className="font-display text-2xl text-forest">Hồ sơ nhận nuôi</h1><Link href="/admin/rescue/coordination" className="inline-block text-sm text-forest underline">Xác minh liên hệ, lên lịch và ghi biên bản cho bé thuộc trạm</Link>
     <label className="block text-sm">Trạng thái<select value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }} className="ml-3 rounded-sm border border-line p-2"><option value="">Tất cả</option>{Object.entries(adoptionLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
     {error && <p role="alert" className="text-danger">{error}</p>}{loading ? <p>Đang tải…</p> : !rows.length && <p>Chưa có hồ sơ phù hợp.</p>}
     {!loading && rows.map(row => <article key={row.id} className="space-y-3 rounded-sm border border-line bg-surface p-5">

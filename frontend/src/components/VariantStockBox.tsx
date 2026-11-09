@@ -8,6 +8,7 @@ import { AddToCartButton } from "./AddToCartButton";
 type StockRow = {
   variant_id: string;
   title: string;
+  unit: string;
   cached_available_qty: number;
   nearest_expiry_date: string | null;
   price: number;
@@ -34,6 +35,7 @@ export function VariantStockBox({
           data.variants.map((v) => ({
             variant_id: v.variant_id,
             title: v.title,
+            unit: v.unit,
             cached_available_qty: v.cached_available_qty,
             nearest_expiry_date: v.nearest_expiry_date,
             price: v.price,
@@ -71,7 +73,7 @@ export function VariantStockBox({
               }`}
               aria-pressed={selected === r.variant_id}
             >
-              {r.title}
+              {r.title.toLocaleLowerCase("vi-VN").includes(r.unit.toLocaleLowerCase("vi-VN")) ? r.title : `${r.title} · ${r.unit}`}
             </button>
           ))}
       </div>
@@ -80,7 +82,7 @@ export function VariantStockBox({
           <div>
             <p className="font-display text-2xl text-ink">{formatVnd(current.price)}</p>
             <p className="mt-1 text-sm text-ink-muted">
-              Còn {current.cached_available_qty}
+              Còn {current.cached_available_qty} {current.unit || "cái"} · {current.title}
             </p>
             {current.nearest_expiry_date ? (
               <p className="mt-0.5 text-sm text-ink-muted">
@@ -89,7 +91,7 @@ export function VariantStockBox({
             ) : null}
           </div>
           {current.cached_available_qty > 0 ? (
-            <AddToCartButton variantId={current.variant_id} />
+            <AddToCartButton variantId={current.variant_id} availableQty={current.cached_available_qty} unit={current.unit} />
           ) : (
             <span className="text-sm text-danger">Hết hàng</span>
           )}

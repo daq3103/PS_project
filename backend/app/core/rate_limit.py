@@ -18,7 +18,7 @@ async def enforce_rate_limit(*, key: str, limit: int, window_seconds: int) -> No
     if int(count) > limit:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Rate limit exceeded ({limit}/{window_seconds}s)",
+            detail="Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.",
         )
 
 

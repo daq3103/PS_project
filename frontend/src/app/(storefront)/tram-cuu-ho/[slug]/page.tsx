@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api } from "@/lib/api-client";
@@ -6,6 +5,8 @@ import { ContactReveal } from "./ContactReveal";
 import { AdoptionForm } from "@/components/community/AdoptionForm";
 import { ReportForm } from "@/components/community/ReportForm";
 import { lifeLabels } from "@/components/community/labels";
+import { PhotoGallery } from "@/components/community/PhotoGallery";
+import { PetDetailsView } from "@/components/community/PetDetailsView";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export default async function CommunityDetailPage({
   } catch {
     notFound();
   }
+  const options = await api.communityPetOptions();
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 md:px-6 md:py-10">
@@ -58,22 +60,8 @@ export default async function CommunityDetailPage({
           {post.district_name ? `, ${post.district_name}` : ""}
         </p>
 
-        {post.images.length > 0 && (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {post.images.map((img) => (
-              <div key={img.upload_id} className="relative aspect-[4/3] overflow-hidden rounded-sm bg-forest/10">
-                <Image
-                  unoptimized
-                  src={img.url}
-                  alt={post.title}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        <PhotoGallery images={post.images} title={post.title} />
+        <PetDetailsView post={post} options={options} />
 
         <div className="mt-6 space-y-3 text-ink">
           <p className="whitespace-pre-wrap leading-relaxed">{post.description}</p>
@@ -82,10 +70,7 @@ export default async function CommunityDetailPage({
         <div className="mt-6 grid gap-4 border-t border-line pt-6 text-sm text-ink-muted sm:grid-cols-2">
           <div>
             <span className="block text-ink">Địa điểm</span>
-            {post.location_detail}
-            {post.ward_name ? `, ${post.ward_name}` : ""}
-            {post.district_name ? `, ${post.district_name}` : ""}
-            {`, ${post.province_name}`}
+            {[post.location_detail, post.ward_name, post.district_name, post.province_name].filter(Boolean).join(", ")}
           </div>
           {post.event_at && (
             <div>
@@ -98,7 +83,6 @@ export default async function CommunityDetailPage({
         </div>
 
         {post.post_type === "adoption" && <div className="mt-6 space-y-2 rounded-sm bg-paper p-4 text-sm">
-          <p>Tuổi ước tính: {post.adoption_meta.age_months == null ? "Chưa rõ" : `${post.adoption_meta.age_months} tháng`}</p>
           <p>Tiêm phòng: {post.adoption_meta.vaccinated == null ? "Chưa rõ" : post.adoption_meta.vaccinated ? "Đã tiêm" : "Chưa tiêm"}</p>
           <p>Triệt sản: {post.adoption_meta.neutered == null ? "Chưa rõ" : post.adoption_meta.neutered ? "Đã thực hiện" : "Chưa thực hiện"}</p>
           {post.adoption_meta.health && <p className="whitespace-pre-wrap">Sức khỏe: {post.adoption_meta.health}</p>}

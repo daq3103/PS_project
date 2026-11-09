@@ -1,0 +1,80 @@
+# Isolated local acceptance environment. Never shares production volumes/networks.
+name: pethome_staging
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["127.0.0.1:8080:80"]
+    volumes: ["./nginx/nginx.conf:/etc/nginx/nginx.conf:ro"]
+    depends_on: [nextjs, fastapi-api]
+    mem_limit: 64m
+  nextjs:
+    image: ps_project-nextjs:latest
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=384
+      INTERNAL_API_URL: http://fastapi-api:8000
+      REVALIDATE_SECRET: ${STAGING_REVALIDATE_SECRET:?Set a separate staging revalidation secret}
+    mem_limit: 640m
+  fastapi-api:
+    image: ps_project-fastapi-api:latest
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-proxy-headers --no-access-log
+    environment: &api-environment
+      APP_ENV: development
+      DATABASE_URL: postgresql+asyncpg://staging:${STAGING_POSTGRES_PASSWORD:?Set a separate staging password}@postgres:5432/pethome_staging
+      REDIS_CACHE_URL: redis://redis-cache:6379/0
+      REDIS_QUEUE_URL: redis://redis-queue:6379/0
+      REDIS_CACHE_PASSWORD: ${STAGING_REDIS_PASSWORD:?Set a separate staging Redis password}
+      REDIS_QUEUE_PASSWORD: ${STAGING_REDIS_PASSWORD}
+      JWT_SECRET: ${STAGING_JWT_SECRET:?Set a separate staging JWT secret}
+      SECRET_ENCRYPTION_KEY: ${STAGING_ENCRYPTION_KEY:?Set a separate staging encryption key}
+      REVALIDATE_SECRET: ${STAGING_REVALIDATE_SECRET}
+      NEXTJS_REVALIDATE_URL: http://nextjs:3000/api/revalidate
+      PAYMENT_PROVIDER: mock
+      RESCUE_DONATIONS_ENABLED: "false"
+      RESCUE_FUND_POLICY_CONFIRMED: "false"
+      RESCUE_AUTOMATION_PAUSED: "false"
+      COMMUNITY_ENABLED: "true"
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      DB_POOL_SIZE: "2"
+      DB_MAX_OVERFLOW: "1"
+    volumes: ["staging_media:/app/data/community-uploads"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis-cache: {condition: service_started}
+      redis-queue: {condition: service_started}
+    mem_limit: 384m
+  fastapi-worker:
+    image: ps_project-fastapi-worker:latest
+    command: arq app.worker.tasks.WorkerSettings
+    environment:
+      <<: *api-environment
+      WORKER_MAX_JOBS: "1"
+    volumes: ["staging_media:/app/data/community-uploads"]
+    depends_on: [fastapi-api]
+    mem_limit: 256m
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: staging
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD}
+      POSTGRES_DB: pethome_staging
+    volumes: ["staging_database:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staging -d pethome_staging"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+    mem_limit: 384m
+  redis-cache:
+    image: redis:7.4-alpine
+    command: redis-server --maxmemory 48mb --maxmemory-policy allkeys-lru --save "" --requirepass ${STAGING_REDIS_PASSWORD}
+    mem_limit: 80m
+  redis-queue:
+    image: redis:7.4-alpine
+    command: redis-server --maxmemory 48mb --maxmemory-policy noeviction --appendonly yes --requirepass ${STAGING_REDIS_PASSWORD}
+    volumes: ["staging_queue:/data"]
+    mem_limit: 80m
+volumes:
+  staging_database:
+  staging_media:
+  staging_queue:

@@ -14,12 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.deps import require_staff_user
+from app.core.deps import require_warehouse_or_owner
 from app.models.commerce import Order
 from app.models.fulfillment import Fulfillment
 from app.models.user import User
 from app.modules.shipping.mock_ghn import MockGHNProvider
-from app.worker import enqueue as job_enqueue
 
 router = APIRouter(prefix="/api/v1", tags=["shipping"])
 _ghn = MockGHNProvider()
@@ -36,6 +35,8 @@ async def ghn_webhook(
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     settings = get_settings()
+    if settings.app_env != "development":
+        raise HTTPException(404, "Không tìm thấy chức năng này.")
     secret = settings.mock_ghn_webhook_secret
     if not secret:
         raise HTTPException(
@@ -63,9 +64,10 @@ async def ghn_webhook(
     except json.JSONDecodeError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid JSON") from exc
 
-    event_id = str(payload.get("OrderCode") or payload.get("event_id") or payload.get("tracking_code"))
-    if not event_id:
+    tracking = str(payload.get("tracking_code") or payload.get("OrderCode") or "")
+    if not tracking:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Missing event id")
+    event_id = str(payload.get("event_id") or sha256(body).hexdigest())
 
     ins = await session.execute(
         text("""
@@ -77,22 +79,35 @@ async def ghn_webhook(
         {"eid": event_id, "payload": json.dumps(payload)},
     )
     if ins.first() is None:
+        await session.commit()
         return {"status": "duplicate_ignored"}
 
-    tracking = str(payload.get("tracking_code") or payload.get("OrderCode") or event_id)
     carrier_status = str(payload.get("Status") or payload.get("status") or "delivering")
     internal = _ghn.map_carrier_status(carrier_status)
 
     ff = await session.scalar(
-        select(Fulfillment).where(Fulfillment.tracking_code == tracking)
+        select(Fulfillment).where(Fulfillment.tracking_code == tracking, Fulfillment.carrier_code == "mock_ghn")
     )
     if not ff:
+        await session.commit()
         return {"status": "ignored", "reason": "fulfillment_not_found"}
+
+    order = await session.scalar(select(Order).where(Order.id == ff.order_id).with_for_update().execution_options(populate_existing=True))
+    ff = await session.scalar(select(Fulfillment).where(Fulfillment.id == ff.id).with_for_update().execution_options(populate_existing=True))
+    allowed = {
+        "ready_to_pick": {"picking", "delivering", "delivered", "delivery_failed", "returning", "returned", "cancelled"},
+        "picking": {"delivering", "delivered", "delivery_failed", "returning", "returned", "cancelled"},
+        "delivering": {"delivered", "delivery_failed", "returning", "returned"},
+        "delivery_failed": {"delivering", "delivered", "returning", "returned"},
+        "returning": {"returned"}, "returned": set(), "delivered": set(), "cancelled": set(),
+    }
+    if internal != ff.internal_status and internal not in allowed.get(ff.internal_status, set()):
+        await session.commit()
+        return {"status": "ignored_stale_status"}
 
     ff.carrier_status = carrier_status
     ff.internal_status = internal
     if internal == "delivered":
-        order = await session.get(Order, ff.order_id)
         if order and order.status == "shipped":
             from app.modules.order.state import transition_order
 
@@ -105,6 +120,7 @@ async def ghn_webhook(
                 note="GHN delivered",
             )
     await session.flush()
+    await session.commit()
     return {"status": "ok"}
 
 
@@ -113,7 +129,7 @@ async def enqueue_create_shipment(
     order_id: UUID,
     body: CreateShipmentBody,
     background_tasks: BackgroundTasks,
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     order = await session.get(Order, order_id)
@@ -125,11 +141,8 @@ async def enqueue_create_shipment(
             detail="Đơn chưa sẵn sàng tạo vận đơn",
         )
 
-    background_tasks.add_task(
-        job_enqueue.enqueue_create_shipment,
-        order_id,
-        body.carrier_code,
-        body.package_count,
-        None,
-    )
+    if body.carrier_code != "mock_ghn" or get_settings().app_env != "development":
+        raise HTTPException(409, "Vui lòng nhập vận đơn đã tạo với hãng vận chuyển trong trang quản lý.")
+    from app.worker.commerce_outbox import record_job
+    await record_job(session, "create_shipment", str(order_id), {"order_id": str(order_id), "carrier_code": body.carrier_code, "package_count": body.package_count})
     return {"status": "enqueued", "order_id": str(order_id)}

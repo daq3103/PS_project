@@ -7,6 +7,7 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
   shipped: { label: "Đang giao", tone: "moss" },
   delivered: { label: "Đã giao", tone: "forest" },
   cancelled: { label: "Huỷ", tone: "danger" },
+  returned: { label: "Hoàn", tone: "danger" },
   active: { label: "Hiện", tone: "forest" },
   hidden: { label: "Ẩn", tone: "ink" },
   draft: { label: "Nháp", tone: "honey" },

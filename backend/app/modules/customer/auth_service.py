@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.core.security import (
@@ -37,7 +38,12 @@ async def register_user(
     password: str,
     email: str | None,
     phone: str | None,
+    username: str | None = None,
 ) -> User:
+    if username:
+        username = username.strip().lower()
+        if await session.scalar(select(User.id).where(User.username == username)):
+            raise HTTPException(409, "Tên tài khoản đã được sử dụng")
     if email:
         exists = await session.scalar(select(User.id).where(User.email == email))
         if exists:
@@ -49,13 +55,18 @@ async def register_user(
 
     user = User(
         full_name=_sanitize_full_name(full_name),
+        username=username,
         email=email,
         phone=phone,
         password_hash=hash_password(password),
         role="customer",
     )
     session.add(user)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(409, "Tên tài khoản hoặc thông tin liên hệ đã được sử dụng") from exc
     return user
 
 
@@ -65,9 +76,12 @@ async def authenticate_user(
     password: str,
     email: str | None,
     phone: str | None,
+    username: str | None = None,
 ) -> User:
     stmt = select(User)
-    if email:
+    if username:
+        stmt = stmt.where(User.username == username.strip().lower())
+    elif email:
         stmt = stmt.where(User.email == email)
     else:
         stmt = stmt.where(User.phone == phone)
@@ -79,17 +93,21 @@ async def authenticate_user(
     return user
 
 
-async def issue_session(session: AsyncSession, user: User) -> dict[str, str]:
-    access = create_access_token(subject=str(user.id), role=user.role)
+async def issue_session(session: AsyncSession, user: User, *, mfa_verified: bool = False) -> dict[str, str]:
     refresh = new_refresh_token()
     csrf = new_csrf_token()
     row = RefreshToken(
         user_id=user.id,
         token_hash=hash_token(refresh),
         expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_ttl_days),
+        mfa_verified=mfa_verified,
     )
     session.add(row)
     await session.flush()
+    access = create_access_token(
+        subject=str(user.id), role=user.role,
+        extra={"auth_version": user.auth_version, "sid": str(row.id)},
+    )
     return {"access_token": access, "refresh_token": refresh, "csrf_token": csrf}
 
 
@@ -97,9 +115,9 @@ async def rotate_refresh(
     session: AsyncSession, *, raw_refresh: str
 ) -> tuple[User, dict[str, str]]:
     th = hash_token(raw_refresh)
-    token = await session.scalar(select(RefreshToken).where(RefreshToken.token_hash == th))
+    token = await session.scalar(select(RefreshToken).where(RefreshToken.token_hash == th).with_for_update())
     if not token:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token không hợp lệ")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.")
 
     # Reuse of revoked token → revoke entire chain for user
     if token.revoked_at is not None:
@@ -110,15 +128,15 @@ async def rotate_refresh(
         )
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
-            detail="Phát hiện reuse refresh token — toàn bộ phiên đã bị thu hồi",
+            detail="Phiên đăng nhập không an toàn. Vui lòng đăng nhập lại trên các thiết bị của bạn.",
         )
 
     if token.expires_at < datetime.now(UTC):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token hết hạn")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
 
     user = await session.get(User, token.user_id)
     if not user or not user.is_active:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="User không hợp lệ")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Tài khoản không hợp lệ.")
 
     token.revoked_at = datetime.now(UTC)
     new_raw = new_refresh_token()
@@ -127,11 +145,15 @@ async def rotate_refresh(
         token_hash=hash_token(new_raw),
         parent_token_id=token.id,
         expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_ttl_days),
+        mfa_verified=token.mfa_verified,
     )
     session.add(new_row)
     await session.flush()
 
-    access = create_access_token(subject=str(user.id), role=user.role)
+    access = create_access_token(
+        subject=str(user.id), role=user.role,
+        extra={"auth_version": user.auth_version, "sid": str(new_row.id)},
+    )
     csrf = new_csrf_token()
     return user, {"access_token": access, "refresh_token": new_raw, "csrf_token": csrf}
 

@@ -17,6 +17,7 @@ export default function AdminSettingsPage() {
       .me()
       .then((res) => {
         setUser(res.user);
+        setTotpEnabled(res.user?.totp_enabled === true);
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
@@ -30,7 +31,7 @@ export default function AdminSettingsPage() {
       setEnroll({ secret: data.secret, provisioning_uri: data.provisioning_uri });
       setTotpEnabled(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không thể tạo TOTP");
+      setError(e instanceof Error ? e.message : "Không thể thiết lập bảo mật");
     }
   }
 
@@ -41,7 +42,10 @@ export default function AdminSettingsPage() {
       const res = await api.adminTotpVerify(code.trim());
       if (res.totp_enabled) {
         setTotpEnabled(true);
-        setMessage("TOTP đã được kích hoạt.");
+        setEnroll(null);
+        setCode("");
+        setMessage("Xác minh hai bước đã được kích hoạt.");
+        window.setTimeout(() => window.location.assign("/admin"), 600);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Mã không đúng");
@@ -51,7 +55,7 @@ export default function AdminSettingsPage() {
   return (
     <div>
       <h1 className="font-display text-3xl text-forest">Cài đặt</h1>
-      <p className="mt-1 text-sm text-ink-muted">Tài khoản staff và bảo mật.</p>
+      <p className="mt-1 text-sm text-ink-muted">Thông tin tài khoản và xác minh hai bước. Quản lý quyền nhân viên ở mục “Nhân viên & quyền”.</p>
 
       {loading && <p className="mt-6 text-ink-muted">Đang tải…</p>}
 
@@ -72,16 +76,16 @@ export default function AdminSettingsPage() {
               <p>
                 <span className="text-ink-muted">Vai trò:</span>{" "}
                 <span className="rounded-full bg-forest/10 px-2 py-0.5 font-medium text-forest">
-                  {user.role}
+                  {user.role === "owner" ? "Quản trị viên" : user.staff_permissions?.length === 2 ? "Nhân viên kho & chăm sóc khách hàng" : ({ warehouse_staff: "Nhân viên kho", cskh_staff: "Nhân viên chăm sóc khách hàng", customer: "Khách hàng" } as Record<string, string>)[user.role] ?? "Thành viên"}
                 </span>
               </p>
             </div>
           </div>
 
-          <div className="rounded-sm border border-line bg-surface p-4">
-            <h2 className="font-display text-xl text-forest">TOTP / Authenticator</h2>
+          {user.role === "owner" ? <div className="rounded-sm border border-line bg-surface p-4">
+            <h2 className="font-display text-xl text-forest">Xác minh hai bước</h2>
             <p className="mt-1 text-sm text-ink-muted">
-              Yêu cầu mã 6 số cho mọi thao tác ghi trong admin.
+              Quản trị viên xác minh một lần khi đăng nhập. Các thao tác sau đó không hỏi lại mã trong cùng phiên.
             </p>
 
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
@@ -93,13 +97,13 @@ export default function AdminSettingsPage() {
                 onClick={() => void startEnroll()}
                 className="mt-4 rounded-full bg-forest px-4 py-2 text-sm font-medium text-white hover:bg-forest-deep"
               >
-                Thiết lập TOTP
+                Thiết lập xác minh hai bước
               </button>
             )}
 
             {enroll && !totpEnabled && (
               <div className="mt-4 space-y-3">
-                <p className="text-sm">Thêm key sau vào Google Authenticator:</p>
+                <p className="text-sm">Thêm khóa này vào ứng dụng xác thực, chẳng hạn Google Authenticator:</p>
                 <code className="block rounded-sm bg-ink/5 p-2 font-mono text-sm break-all">
                   {enroll.secret}
                 </code>
@@ -133,9 +137,9 @@ export default function AdminSettingsPage() {
             )}
 
             {totpEnabled && (
-              <p className="mt-4 text-sm text-forest">TOTP đã bật cho tài khoản này.</p>
+              <p className="mt-4 text-sm text-forest">Xác minh hai bước đã bật cho tài khoản này.</p>
             )}
-          </div>
+          </div> : <p className="rounded-sm border border-line bg-surface p-4 text-sm text-ink-muted">Tài khoản nhân viên thao tác theo quyền được cấp và không cần thiết lập mã xác thực hai bước.</p>}
         </div>
       )}
     </div>

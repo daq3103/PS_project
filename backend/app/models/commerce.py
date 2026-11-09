@@ -84,6 +84,8 @@ class Order(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
     idempotency_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    guest_token_hash: Mapped[str | None] = mapped_column(String(64))
+    request_hash: Mapped[str | None] = mapped_column(String(64))
     customer_name: Mapped[str] = mapped_column(String(150), nullable=False)
     customer_phone: Mapped[str] = mapped_column(String(20), nullable=False)
     customer_email: Mapped[str | None] = mapped_column(String(255))
@@ -131,6 +133,7 @@ class OrderItem(Base):
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[int] = mapped_column(BigInteger, nullable=False)
     line_total: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    discount_amount: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
 
 class OrderStatusHistory(Base):

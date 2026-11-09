@@ -1,0 +1,27 @@
+# Optional: add to the main Compose invocation only after configuring a backup destination.
+services:
+  backup:
+    image: pgvector/pgvector:pg16
+    profiles: [backup]
+    restart: unless-stopped
+    entrypoint: ["sh", "/scripts/backup_service.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_MAX_TOTAL_MB: ${BACKUP_MAX_TOTAL_MB:-5000}
+      BACKUP_MAX_MEDIA_MB: ${BACKUP_MAX_MEDIA_MB:-500}
+    volumes:
+      - ./scripts/backup_service.sh:/scripts/backup_service.sh:ro
+      - community_uploads:/media:ro
+      - ${BACKUP_HOST_DIR:?Set a verified backup destination outside the application disks}:/backup
+    depends_on:
+      postgres: {condition: service_healthy}
+    mem_limit: 64m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}

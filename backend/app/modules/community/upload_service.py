@@ -12,6 +12,7 @@ from sqlalchemy import select
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
+from app.core.deps import has_staff_permission
 from app.models.community import CommunityPost, CommunityPostImage, CommunityUpload
 
 MAX_PIXELS = 20_000_000
@@ -100,7 +101,7 @@ async def can_view_upload(session, key, user):
     )
     if not upload:
         return False
-    if user and (upload.uploader_user_id == user.id or user.role in {"owner", "cskh_staff"}):
+    if user and (upload.uploader_user_id == user.id or has_staff_permission(user, "rescue_manage")):
         return True
     # Approved summaries can retain photos after resolution; hidden/pending photos are private.
     return (

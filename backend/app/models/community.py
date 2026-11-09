@@ -46,6 +46,7 @@ class CommunityUpload(Base):
 
 class CommunityPost(Base):
     __tablename__ = "community_posts"
+    __table_args__ = (Index("ix_community_pet_details", "pet_details", postgresql_using="gin"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     author_user_id: Mapped[uuid.UUID] = mapped_column(
@@ -60,6 +61,10 @@ class CommunityPost(Base):
     pet_type: Mapped[str] = mapped_column(String(20), nullable=False)  # dog, cat, other
     breed: Mapped[str | None] = mapped_column(String(100))
     color: Mapped[str | None] = mapped_column(String(100))
+    pet_details: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    search_text: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     adoption_meta: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     location_detail: Mapped[str | None] = mapped_column(String(500))

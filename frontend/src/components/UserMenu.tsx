@@ -1,23 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { api, type UserDto } from "@/lib/api-client";
 
 const ROLE_LABELS: Record<string, string> = {
-  customer: "Khách hàng",
-  owner: "Chủ shop",
+  customer: "Thành viên",
+  owner: "Quản trị viên",
   warehouse_staff: "Nhân viên kho",
-  cskh_staff: "Nhân viên CSKH",
+  cskh_staff: "Nhân viên chăm sóc khách hàng",
 };
 
 export function UserMenu({ user, communityEnabled = true }: { user: UserDto; communityEnabled?: boolean }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const ref = useRef<HTMLDivElement>(null);
-  const isStaff = ["owner", "warehouse_staff", "cskh_staff"].includes(user.role);
-  const roleLabel = ROLE_LABELS[user.role] ?? user.role;
+  const isStaff = user.role === "owner" || (user.staff_permissions?.length ?? 0) > 0;
+  const roleLabel = user.role !== "owner" && user.staff_permissions?.length === 2
+    ? "Nhân viên kho và chăm sóc khách hàng"
+    : ROLE_LABELS[user.role] ?? user.role;
 
   useEffect(() => {
     if (!open) return;
@@ -38,14 +39,14 @@ export function UserMenu({ user, communityEnabled = true }: { user: UserDto; com
   }, [open]);
 
   async function logout() {
-    setOpen(false);
+    setLogoutError("");
     try {
       await api.logout();
-    } catch {
-      /* ignore */
+      window.dispatchEvent(new Event("petshop:auth"));
+      window.location.replace("/login");
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "Chưa đăng xuất được. Vui lòng thử lại.");
     }
-    window.dispatchEvent(new Event("petshop:auth"));
-    router.push("/");
   }
 
   return (
@@ -97,11 +98,6 @@ export function UserMenu({ user, communityEnabled = true }: { user: UserDto; com
             </MenuLink>
           </nav>
 
-          <div className="border-t border-line" />
-          <SectionTitle>Shop</SectionTitle>
-          <nav className="py-1" role="menu">
-            <MenuLink href="/account/orders" onClick={() => setOpen(false)}><OrderIcon />Đơn hàng của tôi</MenuLink>
-          </nav>
           {communityEnabled && <>
             <div className="border-t border-line" />
             <SectionTitle>Trạm cứu hộ</SectionTitle>
@@ -110,6 +106,11 @@ export function UserMenu({ user, communityEnabled = true }: { user: UserDto; com
               <MenuLink href="/account/adoption-requests" onClick={() => setOpen(false)}>Hồ sơ nhận nuôi</MenuLink>
             </nav>
           </>}
+          <div className="border-t border-line" />
+          <SectionTitle>Shop</SectionTitle>
+          <nav className="py-1" role="menu">
+            <MenuLink href="/account/orders" onClick={() => setOpen(false)}><OrderIcon />Đơn hàng của tôi</MenuLink>
+          </nav>
 
           {isStaff && (
             <>
@@ -134,6 +135,7 @@ export function UserMenu({ user, communityEnabled = true }: { user: UserDto; com
             <LogoutIcon />
             Đăng xuất
           </button>
+          {logoutError && <p role="alert" className="px-4 pb-2 text-xs text-danger">{logoutError}</p>}
         </div>
       )}
     </div>

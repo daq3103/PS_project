@@ -15,6 +15,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir \
+    "google-auth[requests]>=2.38.0,<3" \
     "fastapi>=0.115.0" \
     "uvicorn[standard]>=0.32.0" \
     "sqlalchemy[asyncio]>=2.0.36" \

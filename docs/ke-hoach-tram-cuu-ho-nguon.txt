@@ -1,0 +1,683 @@
+Kế hoạch hệ thống trạm cứu hộ chó mèo
+Chức năng vận hành và kết nối với Shop trên cùng website
+Phiên bản đề xuất 1.0  •  Ngày 26 tháng 10 năm 2026
+Website phát triển từ kênh giải cứu chó mèo, với hai khu vực ngang hàng: Trạm cứu hộ và Shop. Trạm cứu hộ có trang chủ, hồ sơ động vật, luồng nhận nuôi, tiếp nhận thông tin và hoạt động hỗ trợ riêng. Người xem từ kênh có thể theo dõi một bé xuyên suốt quá trình cứu hộ, chăm sóc và tìm gia đình.
+Mục tiêu triển khai: quản lý được công việc thật của trạm, công bố thông tin đã xác minh và kết nối hỗ trợ từ cộng đồng. Hệ thống phải theo dõi được ai đang chăm sóc từng bé, việc nào cần làm, hồ sơ nhận nuôi nào đang xử lý và từng khoản tiền hoặc hiện vật đã đến đâu.
+Phạm vi và nền tảng
+Mặc định một trạm do chủ website vận hành, có thể có nhà chăm sóc tạm và phòng khám đối tác. Nhiều trạm độc lập, tự tạo chiến dịch và nhận tiền riêng là phạm vi mở rộng cần thiết kế xác minh đối tác.
+Dùng chung tài khoản, hạ tầng, thư viện ảnh và lớp tích hợp thanh toán với Shop; tách dữ liệu nghiệp vụ, quyền truy cập và sổ theo dõi tiền cứu hộ. Mỗi động vật có mã hồ sơ riêng; hồ sơ nhận nuôi không phải một đơn mua hàng.
+Người vận hành chịu trách nhiệm xác nhận tiếp nhận, đánh giá chăm sóc và duyệt bàn giao. Website hỗ trợ ghi nhận và điều phối; không tự chẩn đoán, kê điều trị hoặc tự quyết định nhận nuôi.
+Mức
+Phạm vi
+Kết quả
+P0
+Hồ sơ bé, tin cứu hộ, tiếp nhận, chăm sóc cơ bản, nhận nuôi, ghi nhận nhà chăm sóc tạm, đóng góp và thu chi
+Trạm vận hành được các luồng chính
+P1
+Cổng tình nguyện viên, tự đặt lịch, nhắc chăm sóc, chiến dịch nâng cao, mua hàng tặng trạm
+Giảm việc nhập tay và tăng khả năng theo dõi
+P2
+Nhiều trạm, tài trợ định kỳ có ủy quyền, tìm thú lạc bằng ảnh, gợi ý ghép nhận nuôi
+Mở rộng sau khi dữ liệu và quy trình ổn định
+
+Phạm vi tài liệu
+Tài liệu gồm thiết kế trải nghiệm hai khu vực ngang hàng, chức năng công khai và quản trị, luồng cứu hộ và nhận nuôi, gây quỹ và hiện vật, mô hình dữ liệu, API, xử lý nền, bảo mật, báo cáo, lộ trình và tiêu chí nghiệm thu. Các con số về thời gian và tải là mục tiêu đề xuất để kiểm thử, chưa phải năng lực đã đo.
+1 Trạm cứu hộ và Shop trên cùng website
+Điều hướng và trang chủ
+Header luôn có Trạm cứu hộ và Shop ở cùng cấp điều hướng, cùng mức độ nổi bật. Trang gốc giới thiệu câu chuyện của kênh và hai lối vào. Khu vực cứu hộ ưu tiên Theo dõi các bé, Nhận nuôi, Hỗ trợ trạm và Báo tin; Shop giữ giỏ hàng và hành trình mua riêng. Trên mobile vẫn thấy rõ hai lối vào trong menu chính.
+Trang
+Nội dung và thao tác chính
+Mức
+/cuu-ho
+Giới thiệu trạm, cập nhật mới, các bé cần nhà, nhu cầu hỗ trợ, báo cáo gần nhất
+P0
+/cuu-ho/cac-be
+Danh sách và bộ lọc loài, tuổi ước tính, kích thước, khu vực, khả năng nhận nuôi
+P0
+/cuu-ho/be/{slug}
+Câu chuyện, ảnh, mốc chăm sóc công khai, trạng thái, đăng ký nhận nuôi hoặc theo dõi
+P0
+/cuu-ho/bao-tin
+Gửi thông tin động vật cần hỗ trợ; có mã tra cứu và trạng thái tiếp nhận
+P0
+/cuu-ho/ung-ho
+Đóng góp quỹ chung hoặc mục đích được công bố; xem phương thức nhận tiền
+P0
+/cuu-ho/minh-bach
+Báo cáo thu chi theo kỳ, cập nhật sử dụng quỹ và chứng từ đã che thông tin
+P0
+/cuu-ho/dong-hanh
+Đăng ký chăm sóc tạm, tình nguyện, vận chuyển; P0 xử lý hồ sơ thủ công
+P0
+/tai-khoan
+Các tab Đơn Shop, Hồ sơ nhận nuôi, Đóng góp, Công việc được giao theo quyền
+P0
+
+Kết nối từ kênh cứu hộ
+Mỗi video hoặc bài đăng có thể dẫn thẳng về hồ sơ bé hoặc chiến dịch bằng URL ổn định. Lưu nguồn truy cập bằng mã chiến dịch và UTM ở mức cần thiết; không đưa số điện thoại hoặc thông tin người báo tin vào URL. Dùng mã animal_id nội bộ để giữ liên kết khi đổi tên bé; slug cũ chuyển hướng về slug mới.
+Bài cập nhật trên website có bản nháp và bản công bố. P0 cho phép nhập link video đã đăng; việc tự đăng lên mạng xã hội là tích hợp riêng, chỉ triển khai khi có API và quyền phù hợp. Một câu chuyện có thể dẫn tới nhận nuôi, đóng góp hoặc chia sẻ; các nút đều phản ánh trạng thái thực tế.
+Các nguyên tắc kết nối
+Mua hàng hoặc đóng góp không tạo ưu tiên nhận nuôi. Đăng ký nhận nuôi không yêu cầu mua combo tại Shop.
+Đóng góp tại checkout là lựa chọn chủ động; số tiền, nơi nhận và mục đích hiển thị riêng. Không tự cộng khoản đóng góp mặc định.
+Người đăng ký hỗ trợ hoặc nhận nuôi không tự được thêm vào danh sách quảng cáo Shop; lưu lựa chọn nhận tin theo từng mục đích.
+2 Hồ sơ công khai của từng bé
+Nhóm dữ liệu
+Nội dung
+Quy tắc hiển thị
+Nhận diện
+Mã, tên gọi, loài, giới tính nếu biết, tuổi ước tính, màu lông, kích thước
+Ghi rõ chưa biết hoặc ước tính; không biến suy đoán thành xác nhận
+Câu chuyện
+Hoàn cảnh tiếp nhận, ngày vào trạm, ảnh và video, các lần cập nhật
+Duyệt nội dung; bỏ dữ liệu định vị nhạy cảm và thông tin người liên quan
+Chăm sóc
+Tóm tắt sức khỏe, nhu cầu chăm sóc, thông tin tiêm hoặc triệt sản đã xác nhận
+Chỉ công bố trường đã được người có trách nhiệm duyệt; không hiển thị toàn hồ sơ khám
+Hành vi
+Quan sát trong bối cảnh cụ thể, mức làm quen, tương tác với người hoặc vật nuôi
+Có ngày và người ghi nhận; thông tin mới có thể thay đổi đánh giá cũ
+Nhận nuôi
+Chưa mở, đang nhận hồ sơ, đang ghép gia đình, đã nhận nuôi
+Đọc từ trạng thái nghiệp vụ; không sửa tự do bằng nội dung marketing
+Hỗ trợ
+Nhu cầu hiện tại, chiến dịch liên quan, cập nhật chi tiêu được công bố
+Chỉ hiện chiến dịch đang hợp lệ; đóng chiến dịch khi không còn nhận tiền
+
+Chức năng cho người xem
+Lọc và xem hồ sơ, lưu bé quan tâm, chia sẻ đường dẫn, đăng ký nhận cập nhật nếu đồng ý, gửi hồ sơ nhận nuôi và xem hướng dẫn. Nút đăng ký chỉ mở khi bé đủ điều kiện theo chính sách; khi chưa mở phải hiển thị lý do công khai phù hợp và cách theo dõi.
+P1 có ảnh trước và sau, hành trình đã tìm được gia đình và câu chuyện người nhận nuôi đồng ý chia sẻ. Hồ sơ đã nhận nuôi có thể giữ làm trang câu chuyện, nhưng ẩn thông tin gia đình và dừng nhận hồ sơ mới.
+Tách hồ sơ công khai và hồ sơ nội bộ
+Hồ sơ nội bộ có vị trí chính xác, người báo tin, giấy bàn giao, thông tin chủ cũ, địa chỉ nhà chăm sóc tạm, hồ sơ khám và trao đổi với người nhận nuôi. API công khai trả một tập trường được phép, không lấy toàn bộ bản ghi rồi chỉ ẩn ở giao diện. Ảnh công khai là bản sao đã kiểm tra và loại bỏ metadata nhạy cảm.
+Ví dụ: công khai “đang được chăm sóc tại khu vực Hà Nội” nếu được duyệt, còn địa chỉ nhà chăm sóc tạm chỉ hiện cho điều phối và người được giao việc. Nội dung hành vi diễn đạt như “đã làm quen với mèo khác trong lần quan sát ngày…” thay vì cam kết phù hợp mọi gia đình.
+Nghiệm thu: hồ sơ đã chuyển sang đang ghép gia đình phải đổi nút hành động đúng; người xem không lấy được tọa độ hoặc file riêng tư bằng cách gọi API trực tiếp.
+3 Báo tin cứu hộ và phân công xử lý
+Biểu mẫu báo tin
+Thu thập mô tả sự việc, thời điểm nhìn thấy, loài, số lượng ước tính, vị trí, ảnh nếu có, phương thức liên hệ và khả năng liên hệ lại. Đăng nhập không bắt buộc; tài khoản hoặc link xác thực riêng giúp người báo cập nhật thêm. Tọa độ chi tiết chỉ dùng nội bộ, không đăng tự động lên bản đồ công khai.
+Form hiển thị giờ trực, khu vực hỗ trợ và thông tin liên hệ thực tế của trạm. Xác nhận gửi thành công chỉ có nghĩa đã ghi nhận tin. Với tình huống khẩn, cung cấp kênh trực đang hoạt động và lựa chọn liên hệ cơ sở thú y phù hợp đã được trạm xác minh; không hứa đội cứu hộ đang tới khi chưa có người nhận việc.
+Bước
+Xử lý hệ thống
+Người chịu trách nhiệm
+Tiếp nhận
+Tạo report_id, lưu file riêng tư, kiểm tra spam, ghi outbox thông báo
+Hệ thống
+Xác minh
+Liên hệ lại, kiểm tra địa điểm và thông tin; gợi ý tin trùng theo thời gian và khu vực
+Điều phối
+Phân loại
+Ghi mức khẩn, nhu cầu chuyên môn, phạm vi hỗ trợ và điều kiện tiếp cận
+Người trực có đào tạo
+Điều phối
+Gán người chính, người hỗ trợ, phương tiện, đích đến; kiểm tra năng lực tiếp nhận
+Điều phối
+Thực hiện
+Cập nhật đã nhận việc, đang xử lý, tiếp cận được hay không, kết quả và bàn giao
+Người được phân công
+Kết thúc
+Liên kết hồ sơ động vật hoặc ghi hướng dẫn/chuyển đơn vị, hủy hay không tìm thấy
+Điều phối xác nhận
+
+Trạng thái và các ngoại lệ
+Report có trạng thái mới, cần xác minh, đã phân công, đang xử lý, hoàn tất, chuyển đơn vị, trùng hoặc đóng có lý do. Độ khẩn là thuộc tính riêng. Một tin có thể liên quan nhiều động vật; nhiều tin có thể trỏ đến cùng một ca. Gộp tin chỉ tạo liên kết và giữ lịch sử, không xóa dấu vết người báo.
+Không đủ chỗ hoặc ngoài phạm vi: ghi người phụ trách liên hệ, phương án chuyển và kết quả. Ca khẩn chưa được người trực xác nhận sẽ được nhắc và nâng cấp tới người dự phòng theo lịch đã cấu hình. Thuật toán chỉ hỗ trợ phát hiện thiếu thông tin hoặc trùng, không tự đưa ra chẩn đoán hay chỉ dẫn bắt giữ động vật.
+Nghiệm thu: gửi lại cùng request không tạo hai ca; người nhận việc phải xác nhận, và trường hợp không ai nhận vẫn xuất hiện trên danh sách cần xử lý.
+4 Tiếp nhận và quản lý năng lực chăm sóc
+Tạo hồ sơ và một đợt chăm sóc
+Khi tiếp nhận thực tế, tạo hoặc tìm animal_id đã tồn tại; sau đó mở care_episode cho lần trạm chịu trách nhiệm chăm sóc này. Ghi nguồn đến, thời điểm, tình trạng quan sát ban đầu, hồ sơ bàn giao, đơn vị hoặc người đưa đến và người nhận. Mỗi bé có mã riêng dù được đưa về cùng một đàn.
+Một ca cứu hộ có thể dẫn tới nhiều hồ sơ; một bé có thể quay lại trạm ở một đợt khác. Giữ animal_id xuyên suốt để không mất lịch sử và không báo cáo bé quay lại như một danh tính mới. Các loại dữ liệu tiếp nhận, chăm sóc và kết quả được ASPCApro đề xuất theo dõi riêng [2].
+Kiểm tra nơi tiếp nhận
+Năng lực được cấu hình theo khu vực, loài, vị trí, người chăm sóc, khả năng hỗ trợ chuyên môn và giới hạn đã được trạm duyệt. Không chỉ dùng tổng số ô chuồng. Một chỗ trống chỉ được gán khi phù hợp điều kiện hiện tại của bé và khu vực đó.
+ASV nhấn mạnh hồ sơ nhận diện riêng và việc hoạt động trong năng lực chăm sóc [1]. Trong hệ thống, điều này được chuyển thành dữ liệu vị trí, người phụ trách và cảnh báo quá tải; phần mềm không tự xác định sức chứa hoặc yêu cầu y tế thay người chuyên môn.
+Tình huống
+Cách xử lý
+Hai người cùng gán chỗ cuối
+Khóa bản ghi năng lực hoặc dùng ràng buộc không trùng khoảng thời gian; chỉ một gán thành công
+Hết chỗ phù hợp
+Đưa vào điều phối chuyển phòng khám, nhà chăm sóc tạm hoặc đơn vị đối tác; không âm thầm vượt hạn mức
+Bé quay lại sau nhận nuôi
+Dùng animal_id cũ, mở đợt chăm sóc mới khi trách nhiệm thực sự chuyển lại
+Chuyển từ trạm sang nhà chăm sóc tạm
+Ghi chuyển vị trí và trách nhiệm bàn giao; vẫn thuộc đợt chăm sóc của trạm
+Có người nhận là chủ cũ
+Tạo hồ sơ yêu cầu xác minh; tạm giữ quyết định bàn giao nhận nuôi; đối chiếu bởi người có thẩm quyền
+
+Quyền sở hữu và bàn giao
+Lưu căn cứ tiếp nhận, trường hợp tìm chủ, thời hạn hoặc điều kiện cần rà soát và quyết định của người phụ trách. Không tự suy ra quyền cho nhận nuôi chỉ vì đã qua một số ngày do phần mềm đặt sẵn. Chính sách xác minh chủ và mẫu bàn giao phải được trạm rà soát cho địa bàn hoạt động trước khi áp dụng.
+Nghiệm thu: mỗi bé đang được trạm chăm sóc có một vị trí hiện hành và một người chịu trách nhiệm; không có hai đợt chăm sóc mở trùng cho cùng bé.
+5 Vòng đời hồ sơ và công việc chăm sóc
+Các trạng thái độc lập
+Trục dữ liệu
+Giá trị ví dụ
+Ý nghĩa
+Đợt chăm sóc
+Đang mở, đã kết thúc; kết quả nhận nuôi, về chủ, chuyển đơn vị, qua đời hoặc khác có lý do
+Ghi trách nhiệm của trạm và kết quả thực tế
+Vị trí
+Trạm, phòng khám, nhà chăm sóc tạm, đang vận chuyển
+Có lịch sử chuyển; không suy ra đã nhận nuôi chỉ từ vị trí
+Chăm sóc
+Chờ đánh giá, đang theo dõi hoặc điều trị, đánh giá đã cập nhật
+Quyết định và thời điểm do người phụ trách xác nhận
+Khả năng nhận nuôi
+Chưa mở, đang nhận hồ sơ, đang ghép, tạm dừng, đã bàn giao
+Chỉ cho phép thay đổi theo điều kiện và quyền
+Công bố
+Nháp, chờ duyệt, công khai, ẩn hoặc lưu trữ
+Tách khỏi trạng thái thực; ẩn trang không làm mất hồ sơ
+
+Hồ sơ chăm sóc và khám chữa
+Ghi cân nặng theo thời điểm, ăn uống và hành vi quan sát, lịch khám, kết quả do cơ sở chuyên môn cung cấp, tài liệu đính kèm và kế hoạch chăm sóc đã duyệt. Mỗi bản ghi có tác giả, thời điểm thực hiện và thời điểm nhập; sửa bản ghi tạo phiên bản hoặc ghi đính chính thay vì ghi đè mất lịch sử.
+Lịch tiêm, tái khám, thuốc hoặc cách chăm sóc chỉ được nhập theo hướng dẫn của người có chuyên môn. Website lưu lịch, nhắc việc và ghi xác nhận đã thực hiện; không tự sinh liều dùng, chẩn đoán hoặc phác đồ. Hồ sơ liên quan đến y tế có quyền riêng; người nhận nuôi nhận bản tóm tắt và tài liệu phù hợp khi bàn giao.
+Công việc hằng ngày
+Mỗi việc có bé hoặc khu chăm sóc liên quan, người phụ trách, hạn, hướng dẫn đã duyệt, mức ưu tiên và trạng thái.
+Các trạng thái gồm cần làm, đã nhận, đang làm, hoàn tất, bỏ qua có lý do và quá hạn. Tác vụ lặp có một occurrence cho mỗi kỳ để đánh dấu hai lần không tạo hai lần thực hiện.
+Người trực xem bảng ca với việc quá hạn, thay đổi sức khỏe cần chuyển người chuyên môn và ghi chú bàn giao ca. Việc khẩn không được chỉ nằm trong email chưa đọc.
+Điều kiện mở nhận nuôi
+Người phụ trách xác nhận đã rà soát nguồn tiếp nhận, quyền bàn giao, nhu cầu chăm sóc và thông tin cần trao đổi với gia đình. Không có một điều kiện chung kiểu tất cả bé phải giống nhau về tuổi hoặc tình trạng sức khỏe; điều kiện cần phù hợp từng trường hợp và khả năng hỗ trợ.
+Khi bé qua đời, chuyển đơn vị hoặc không còn đủ điều kiện ghép, hệ thống dừng lịch mời nhận nuôi, rà soát chiến dịch hỗ trợ liên quan và tạo việc cập nhật thông tin. Việc công bố câu chuyện và thông báo người đóng góp cần được người phụ trách duyệt.
+6 Đăng ký nhận nuôi và xét hồ sơ
+Thông tin đăng ký cần thiết
+Form ngắn gồm bé quan tâm, liên hệ đã xác minh, khu vực sinh sống, điều kiện nơi ở liên quan đến vật nuôi, thời gian chăm sóc, vật nuôi hiện có và nhu cầu hỗ trợ. Cho phép chưa biết bé phù hợp để trao đổi với điều phối. Không yêu cầu người đăng ký kê khai dữ liệu nhạy cảm không cần thiết ngay từ đầu.
+Ưu tiên trao đổi để tìm mức phù hợp và hỗ trợ gia đình. Best Friends khuyến khích cách tiếp cận dựa trên hội thoại và hạn chế thiên kiến [3]. Hệ thống không tự từ chối người nhận nuôi theo điểm AI, mức chi tiêu tại Shop hoặc số tiền từng đóng góp.
+Trạng thái hồ sơ
+Người thao tác
+Điều kiện chuyển
+Nháp → Đã gửi
+Người đăng ký
+Đủ thông tin bắt buộc, đồng ý cách xử lý dữ liệu và liên hệ
+Đã gửi → Đang xem xét
+Điều phối
+Có người phụ trách, kiểm tra hồ sơ trùng và tình trạng bé
+Cần bổ sung hoặc trao đổi
+Điều phối và người đăng ký
+Lưu câu hỏi, lịch hẹn, kết quả trao đổi và bước tiếp theo
+Đề xuất phù hợp
+Người xét hồ sơ
+Có nhận xét dựa trên nhu cầu cụ thể; chưa tạo quyền sở hữu
+Được duyệt ghép
+Người có quyền duyệt
+Bé vẫn đủ điều kiện, chưa có ghép độc quyền đang hoạt động
+Rút, không phù hợp hoặc hết hạn
+Người đăng ký hoặc điều phối
+Lưu lý do thích hợp, thông báo và hướng hỗ trợ nếu có
+
+Nhiều hồ sơ cho cùng một bé
+Cho phép nhiều người bày tỏ quan tâm. Khi duyệt một ghép, transaction khóa hồ sơ bé, kiểm tra điều kiện mới nhất và tạo placement độc quyền có thời hạn hẹn bàn giao. Các hồ sơ khác chuyển sang chờ hoặc được gợi ý bé khác; không tự coi người gửi sớm nhất là được nhận.
+Database có ràng buộc chỉ một ghép nhận nuôi đang hoạt động cho một bé. Hai nhân viên duyệt đồng thời sẽ có một thao tác bị từ chối và phải tải lại. Nếu người được duyệt rút hoặc bỏ hẹn, nhân viên kết thúc ghép rồi mở lại hồ sơ nhận nuôi theo chính sách.
+Lịch hẹn và giao tiếp
+P0 điều phối nhập lịch gặp, gọi điện hoặc bàn giao; P1 người đăng ký chọn khung còn trống. Lưu múi giờ, địa điểm được chia sẻ, người hỗ trợ, trạng thái xác nhận và lý do đổi lịch. Chỉ gửi nhắc khi lịch vẫn còn hiệu lực; hủy lịch phải hủy cả tác vụ nhắc cũ.
+7 Bàn giao và đồng hành sau nhận nuôi
+Bàn giao nhận nuôi
+Người phụ trách kiểm tra lại hồ sơ được duyệt, danh tính theo chính sách tối thiểu cần thiết, tình trạng bé, tài liệu chăm sóc và nội dung thỏa thuận. Bản thỏa thuận có version, người xác nhận và thời điểm; ký điện tử hoặc ký bản giấy rồi lưu là lựa chọn triển khai cần chốt, không mặc định có giá trị pháp lý như nhau.
+Trong một transaction, xác nhận bàn giao, hoàn tất placement, ghi kết quả cho đợt chăm sóc, kết thúc vị trí cũ và lịch việc không còn phù hợp. Ghi outbox gửi hồ sơ bàn giao và tạo lịch hỗ trợ sau nhận nuôi. Nếu có giai đoạn thử chăm sóc, phải nêu rõ ai chịu trách nhiệm và khi nào mới được ghi là nhận nuôi hoàn tất.
+Lịch theo dõi đề xuất
+Mốc tham khảo
+Nội dung
+Xử lý
+Sau 3 ngày
+Đã nhận tài liệu, tình hình thích nghi và câu hỏi cần hỗ trợ
+Người nhận cập nhật ngắn; điều phối giải đáp hoặc chuyển chuyên môn
+Sau 14 ngày
+Khó khăn chăm sóc, nhu cầu điều chỉnh hỗ trợ, lịch hẹn đã được hướng dẫn
+Ghi nhận và phân công người xử lý; không tự diễn giải là đánh giá y tế
+Sau 30 ngày
+Xác nhận tình hình, kết thúc hoặc kéo dài kế hoạch hỗ trợ
+Cập nhật kết quả theo dõi, không xóa lịch sử
+Khi có sự cố
+Bé đi lạc, cần hỗ trợ, gia đình không thể tiếp tục chăm sóc
+Tạo ticket và thông báo điều phối; theo quy trình được trạm duyệt
+
+Các mốc này là cấu hình vận hành, không phải quy chuẩn áp dụng cho mọi bé. Chỉ thu ảnh hoặc cập nhật cần thiết; công khai câu chuyện sau nhận nuôi cần đồng ý riêng. Không đăng địa chỉ hoặc thông tin gia đình từ nội dung trao đổi.
+Trả lại hoặc chuyển người chăm sóc
+Người nhận có thể đề nghị hỗ trợ trước khi trả. Khi thực sự bàn giao lại trạm, ghi kết thúc trách nhiệm của placement cũ, mở đợt chăm sóc mới trên animal_id cũ và bố trí chỗ phù hợp. Không xóa kết quả nhận nuôi trước đó để làm đẹp số liệu; báo cáo hiển thị riêng lượt quay lại.
+Nếu chuyển sang một gia đình khác, điều phối xác minh và lập hồ sơ bàn giao phù hợp; sửa tên người nhận trong hồ sơ cũ không được xem là quy trình chuyển giao. Trường hợp tìm lại chủ cũ hoặc tranh chấp đưa vào danh sách xử lý riêng, có người chịu trách nhiệm.
+Liên kết với tài khoản chung
+Sau bàn giao, tạo liên kết được xác nhận giữa animal_id và hồ sơ thú cưng của người nhận. Họ được xem tài liệu liên quan của bé, không được xem thông tin người báo tin, chủ cũ hoặc hồ sơ nhận nuôi của người khác. Lịch sử cứu hộ gốc vẫn thuộc hệ thống trạm.
+8 Chăm sóc tạm và tình nguyện viên
+Nhà chăm sóc tạm
+Lưu hồ sơ hộ nhận chăm sóc tạm, loài phù hợp, số lượng tối đa đã được trạm xác nhận, khoảng thời gian sẵn sàng, điều kiện liên quan, người liên hệ và phương án dự phòng. P0 nhân viên ghi và duyệt hồ sơ; P1 có cổng để hộ cập nhật lịch rảnh và gửi nhật ký.
+Mỗi đợt gửi có bé, hộ nhận, ngày bắt đầu và dự kiến kết thúc, người điều phối, vật tư bàn giao, lịch cần thực hiện và cách xử lý chi phí. Chăm sóc tạm không tự tạo kết quả nhận nuôi. Khi chuyển vị trí, phải xác nhận bàn giao hai đầu và không làm mất hồ sơ chăm sóc đang mở.
+Nghiệp vụ
+Kiểm tra hệ thống
+Đầu ra
+Gán bé cho hộ
+Năng lực theo loài và thời gian; điều kiện của bé; không có placement xung đột
+Placement và lịch chăm sóc được xác nhận
+Gia hạn hoặc đổi hộ
+Kiểm tra lịch chồng lấn, khả năng tiếp tục và người nhận mới
+Lịch sử trách nhiệm, không ghi đè địa chỉ cũ
+Kết thúc chăm sóc tạm
+Xác nhận bé ở đâu tiếp theo, tài liệu và vật tư bàn giao
+Vị trí mới và trạng thái đợt gửi đã đóng
+Chi phí phát sinh
+Tạo yêu cầu kèm chứng từ, liên kết bé và ngân sách
+Duyệt chi theo quyền; không tự hoàn tiền theo upload
+
+Tình nguyện và vận chuyển
+Các vai trò gồm hỗ trợ chăm sóc, vận chuyển, chụp ảnh, nhập dữ liệu, nội dung và sự kiện. Hồ sơ có kỹ năng do người dùng khai báo, đào tạo hoặc xác nhận cần thiết, khu vực, lịch rảnh và người phụ trách. Quyền thực tế chỉ được cấp sau duyệt, không lấy nhãn tự khai làm quyền truy cập.
+Công việc có giới hạn người, khung giờ, người dẫn ca, hướng dẫn và xác nhận tham gia. Chặn đăng ký trùng lịch và vượt số chỗ. Người bỏ ca phải báo điều phối để tìm người thay; hệ thống không mặc định công việc đã được làm chỉ vì hết giờ.
+Phạm vi xem thông tin
+Tình nguyện viên chỉ xem nhiệm vụ và dữ liệu cần thiết. Người vận chuyển xem điểm đón, điểm trả và liên hệ trong thời gian được giao; không xem toàn danh sách hộ chăm sóc tạm hoặc dữ liệu người đóng góp. Thu hồi quyền theo nhiệm vụ khi kết thúc hoặc đổi người.
+Nghiệm thu: hai yêu cầu đồng thời không gán vượt năng lực hộ; một tình nguyện viên không đăng ký hai ca chồng lấn; kết thúc chăm sóc tạm không tăng số nhận nuôi.
+9 Chiến dịch hỗ trợ và trải nghiệm đóng góp
+Các hình thức hỗ trợ
+P0 có đóng góp một lần vào quỹ chung hoặc chiến dịch cụ thể và đăng ký tặng hiện vật. P1 thêm tài trợ nhu cầu của một bé với nội dung rõ về phân bổ. P2 mới có thanh toán định kỳ khi nhà cung cấp hỗ trợ và người đóng góp ủy quyền, có lịch sử và cách hủy dễ thấy.
+Dữ liệu chiến dịch
+Nội dung bắt buộc
+Mục đích
+Chi cho nhu cầu nào, liên quan bé hoặc ca nào, ai chịu trách nhiệm
+Ngân sách và thời gian
+Số tiền mục tiêu hoặc không đặt mục tiêu; thời gian nhận; các hạng mục dự kiến
+Phân bổ
+Quỹ hạn chế theo mục đích hay quỹ chung; chính sách khi đủ, thiếu hoặc dư tiền
+Xác minh
+Người duyệt, thông tin trạm, căn cứ nhu cầu, tài liệu đã kiểm tra
+Cập nhật
+Mốc thực hiện, khoản đã chi, số còn, điều chỉnh và báo cáo sau kết thúc
+Công khai
+Số đã xác nhận, thời điểm chốt số liệu, phí và khoản hoàn được giải thích
+
+Luồng đóng góp
+Chọn mục đích, nhập số tiền VND, chọn tên hiển thị hoặc ẩn danh, liên hệ nhận xác nhận nếu muốn và phương thức thanh toán. Tóm tắt trước xác nhận phải ghi rõ khoản hỗ trợ, người nhận và chính sách áp dụng. Việc chọn ẩn danh áp dụng cho hiển thị công khai, không có nghĩa giao dịch không còn thông tin đối soát nội bộ.
+P0 có thể dùng chuyển khoản theo mã riêng và nhân viên đối soát hoặc một cổng online được cấp cho hoạt động này. Phiếu ghi nhận đóng góp không tự được mô tả là chứng từ khấu trừ thuế hoặc hóa đơn bán hàng. Tư cách nhận tiền, nội dung vận động và nghĩa vụ công bố phải được chủ trạm rà soát trước mở nhận tiền thật.
+Vòng đời chiến dịch
+Nháp → Chờ duyệt → Đang nhận → Tạm dừng hoặc Kết thúc nhận → Báo cáo hoàn tất → Lưu trữ. Dừng nhận tiền mới không xóa nghĩa vụ đối soát các giao dịch đang chờ. Thay đổi mục đích sau khi đã nhận phải có phiên bản, căn cứ và cách xử lý theo cam kết; không âm thầm chuyển quỹ sang việc khác.
+Có thể vượt mục tiêu khi nhiều người trả cùng lúc hoặc chuyển khoản đến muộn. Công bố trước cách xử lý phần dư; không chỉ dựa vào việc ẩn nút đóng góp. Một bé đã nhận nuôi hoặc qua đời không tự động cho phép chuyển tiền hạn chế mục đích sang quỹ chung.
+Nghiệm thu: tiền đang chờ hoặc ảnh chụp chuyển khoản chưa đối soát không làm tăng tiến độ; đóng góp ẩn danh không lộ tên trong danh sách, export công khai hoặc metadata.
+10 Thanh toán thu chi và minh bạch quỹ
+Ghi nhận tiền vào
+Tạo donation_intent và payment_attempt với mã riêng, số tiền và mục đích. Online xác minh kết quả qua backend, kiểm tra chữ ký và số tiền; chuyển khoản được ghép với giao dịch ngân hàng thực nhận. Một giao dịch ngân hàng hoặc provider transaction chỉ được ghi nhận một lần, kể cả đã được nhập tay trước khi callback tới.
+Tách ba thời điểm: người ủng hộ cam kết, giao dịch được xác nhận đã thu và tiền đã đối soát về tài khoản nhận. Số tiến độ công khai ghi rõ dùng đại lượng nào. Mặc định hiển thị đã xác nhận trừ khoản hoàn thành công, kèm thời điểm cập nhật; không dùng tổng bấm nút ủng hộ.
+Sổ theo dõi và báo cáo
+Đại lượng
+Quy tắc
+Đã xác nhận đóng góp
+Tổng khoản thu hợp lệ theo giao dịch duy nhất; tách nguồn cá nhân, Shop và nguồn khác
+Đã hoàn hoặc bị thu hồi
+Bút toán riêng liên kết khoản gốc; không sửa xóa khoản thu đã phát sinh
+Phí thanh toán
+Ghi riêng phí cổng hoặc ngân hàng; không giấu trong số tiền thực nhận
+Chi tiêu
+Có hạng mục, bé hoặc chiến dịch, người yêu cầu, người duyệt, chứng từ và trạng thái trả
+Cam kết chi
+Khoản đã được duyệt nhưng chưa trả; tính khi xác định số còn có thể sử dụng
+Số có thể dùng
+Tiền đã đối soát + số dư đầu − hoàn và phí − chi đã trả − khoản giữ cho nghĩa vụ đang chờ; xét theo từng quỹ
+
+Ví dụ minh họa: xác nhận 10 triệu đồng, hoàn thành công 500 nghìn, phí 100 nghìn, đã chi 3 triệu và giữ cho khoản chi được duyệt 1 triệu. Nếu toàn bộ khoản thu đã đối soát và không có nghĩa vụ khác, số còn có thể dùng là 5,4 triệu. Tiến độ hỗ trợ sau hoàn là 9,5 triệu; hai con số có ý nghĩa khác nhau.
+Phê duyệt và xử lý ngoại lệ
+Khoản chi đi qua đề nghị → duyệt → thanh toán → đối soát → công bố bản đã che thông tin. Người đề nghị không tự duyệt khoản chi của mình; cấu hình người thay thế và ngưỡng cần duyệt thêm. Một quỹ hạn chế mục đích không được chi cho quỹ khác nếu chưa có căn cứ phù hợp với cam kết.
+Callback lặp dùng khóa giao dịch và ràng buộc unique. Sai số tiền hoặc chuyển nhầm nội dung vào danh sách đối soát; không tự gán bằng tên giống nhau. Hoàn tiền có hạn mức bằng khoản đã thu trừ khoản đã hoàn và đang chờ; retry truy vấn tham chiếu cũ trước khi gửi mới. Khoản bị tranh chấp hoặc thu hồi sau khi đã chi phải ghi nhận nghĩa vụ còn thiếu và cảnh báo xử lý.
+Báo cáo tháng có bản chốt và version điều chỉnh, công khai bản chứng từ đã che dữ liệu cá nhân. Đây là sổ vận hành phục vụ minh bạch, không mặc định thay thế báo cáo kế toán hoặc kiểm toán.
+11 Liên kết hỗ trợ giữa Shop và trạm
+Hình thức
+Luồng xử lý
+Điểm kiểm soát
+Đóng góp tiền riêng
+Khách mở trang hỗ trợ, tạo donation và thanh toán độc lập
+Không cần mua hàng; khoản thu gắn quỹ thay vì doanh thu bán hàng
+Góp thêm khi checkout
+P1 hiển thị lựa chọn chủ động; tạo khoản đóng góp tách với tiền hàng
+P0 ưu tiên hai giao dịch tách; ghép thanh toán chỉ khi hỗ trợ phân bổ và hoàn từng phần
+Mua hàng tặng trạm
+Đơn Shop có loại đích nhận là trạm; kho giữ, đóng gói, giao và trạm xác nhận nhận
+Chỉ tăng hiện vật đã nhận khi có biên bản hoặc xác nhận; không tăng tiền quyên góp
+Shop trích tiền hỗ trợ
+Cấu hình cách tính theo đơn đủ điều kiện, lập khoản phải chuyển, thực chuyển và đối soát
+Công bố cơ sở tính; không coi cam kết trích là tiền trạm đã nhận
+
+Mua hàng tặng trạm
+Trạm tạo danh sách nhu cầu theo loại, quy cách, lượng cần, điều kiện còn hạn và thời gian. Khách chọn sản phẩm phù hợp; đơn sử dụng giá và tồn của Shop, địa chỉ nhận do trạm cấu hình. Có thể ẩn địa chỉ nhận riêng tư trên phần hiển thị công khai, nhưng người giao được cấp thông tin cần thiết.
+Theo dõi riêng nhu cầu, đã được cam kết, đang giao và đã nhận dùng được. Hai người mua cùng lúc kiểm tra nhu cầu còn mở theo transaction hoặc hiển thị rõ có thể vượt nhu cầu. Khách muốn tiếp tục khi đã đủ phải biết hàng dư sẽ dùng thế nào; không tự thay sang bé hoặc mục đích khác.
+Shop ghi xuất hàng một lần. Trạm ghi phiếu nhận với mã shipment và dòng hàng duy nhất; sau kiểm tra mới nhập kho vật tư của trạm theo lô và hạn dùng. Kho bán hàng và kho cứu hộ có chủ sở hữu hoặc mục đích rõ ràng, không dùng chung một số tồn. Hoàn hoặc trả món quà phải đảo các bút toán tương ứng và cập nhật nhu cầu.
+Hiện vật được gửi từ bên ngoài
+Người hỗ trợ đăng ký loại hàng, số lượng dự kiến và cách chuyển. Nhân viên hẹn nhận, kiểm tra quy cách, tình trạng, hạn dùng và ghi lượng thực nhận. Hàng chưa nhận hoặc không sử dụng được không cộng vào khả dụng. Tiền quy đổi tham khảo của hiện vật nếu công bố phải ghi phương pháp và tách khỏi tiền mặt.
+Cam kết hỗ trợ từ doanh thu Shop
+Ví dụ một chương trình tự chọn trích 5% tiền hàng sau giảm giá, loại phí ship và khoản bị hoàn. Lưu policy_version tại thời điểm đơn đủ điều kiện, ghi khoản phải chuyển theo sự kiện duy nhất, rồi ghi chuyển tiền thực tế. Nếu hoàn đơn sau khi đã chuyển, lập điều chỉnh kỳ sau hoặc ghi phần Shop chịu theo chính sách công bố; không rút tiền trạm âm thầm.
+Báo cáo chung phải loại giao dịch chuyển nội bộ khi cộng tổng tiền từ bên ngoài. Một món hàng được mua tặng có thể có doanh thu Shop và hiện vật trạm nhận, nhưng không được báo thêm lần nữa thành một khoản tiền cộng đồng quyên góp.
+12 Quản trị phân quyền và duyệt nội dung
+Vai trò
+Quyền nghiệp vụ
+Giới hạn dữ liệu
+Quản lý trạm
+Chính sách, phân công, điều kiện bàn giao, duyệt công bố và xử lý ngoại lệ
+Cấp quyền nhạy cảm có MFA và audit
+Điều phối cứu hộ
+Xác minh tin, phân công, tiếp nhận, chuyển nơi chăm sóc
+Được xem liên hệ và vị trí của ca phụ trách
+Chăm sóc và chuyên môn
+Ghi nhật ký, hồ sơ khám, kế hoạch đã được duyệt, xác nhận việc
+Phạm vi theo bé hoặc khu phụ trách; không tự có quyền duyệt tiền
+Điều phối nhận nuôi
+Trao đổi hồ sơ, lịch hẹn, đề xuất, bàn giao theo quyền
+Không xem lịch sử mua sắm hay đóng góp để xếp ưu tiên
+Tài chính
+Đối soát, hạng mục chi, hoàn tiền, báo cáo và chứng từ
+Không tự công bố dữ liệu riêng tư hoặc sửa hồ sơ chăm sóc
+Nội dung
+Biên tập câu chuyện, ảnh, chiến dịch và báo cáo công khai
+Chỉ dùng trường và tài liệu đã được phép công bố
+Tình nguyện viên
+Xem và cập nhật nhiệm vụ được giao
+Không xem toàn danh sách người nhận nuôi, địa chỉ hoặc tiền
+Admin Shop
+Sản phẩm, kho bán, đơn hàng và chương trình hỗ trợ của Shop
+Không mặc định truy cập hồ sơ nhận nuôi hoặc ca cứu hộ
+
+Màn hình làm việc hằng ngày
+Dashboard trạm gồm ca mới chưa có người nhận, bé chưa có người phụ trách, công việc quá hạn, năng lực tiếp nhận, hồ sơ nhận nuôi chờ xử lý, lịch bàn giao, tiền chờ đối soát và chiến dịch cần cập nhật. Mỗi chỉ số mở ra danh sách đối tượng thật với người phụ trách và thời gian chờ.
+Duyệt công bố
+Ảnh, câu chuyện và báo cáo đi qua nháp, duyệt và công khai. Dữ liệu hệ thống như trạng thái nhận nuôi hoặc tổng tiền không được người viết bài sửa thủ công để khớp nội dung. Mỗi bản công bố có nguồn, thời điểm, người duyệt và quyền sử dụng ảnh cần thiết.
+Chứng từ công khai phải là bản đã che số tài khoản, số điện thoại, địa chỉ và thông tin không cần công bố; giữ bản gốc ở kho riêng tư. Khi ẩn một hồ sơ hoặc tài liệu, thu hồi quyền đọc, URL có hạn và cache liên quan; chỉ gỡ nút trên giao diện là chưa đủ.
+Cơ chế hỗ trợ và khiếu nại
+Tạo ticket cho yêu cầu điều chỉnh thông tin, sai lệch đóng góp, phản ánh nhận nuôi hoặc nội dung. Lưu người xử lý và lý do đóng. Báo cáo nghi vấn được xử lý riêng tư; không công khai danh sách đen người nhận nuôi hay người báo tin dựa trên cáo buộc chưa xác minh.
+13 Kiến trúc hệ thống và ranh giới module
+Giữ kiến trúc một backend chia module của bản Shop. Web có hai nhánh route /shop và /cuu-ho, dùng chung đăng nhập. API và worker chạy riêng; PostgreSQL là nguồn chính, Redis hỗ trợ cache và hàng đợi, object storage lưu ảnh và tài liệu. Có thể dùng chung máy chủ ban đầu nhưng cần phân quyền và giới hạn tài nguyên theo loại công việc.
+Module
+Dữ liệu và trách nhiệm
+Kết nối
+Rescue Intake
+Tin báo, xác minh, ca cứu hộ, phân công, nguồn tiếp nhận
+Animal Registry, Tasks, Notifications
+Animal Registry
+Định danh bé, đợt chăm sóc, vị trí và kết quả
+Care, Placement, Publishing
+Care and Capacity
+Nhật ký, tài liệu chuyên môn, việc theo ca, năng lực tiếp nhận
+Nhân viên, hộ tạm, phòng khám
+Adoption and Placement
+Hồ sơ nhận nuôi, ghép, lịch hẹn, bàn giao, theo dõi
+Registry, Identity, Tasks
+Foster and Volunteers
+Hộ chăm sóc tạm, hồ sơ tình nguyện, lịch và phân công
+Capacity, Placement, Permissions
+Campaigns and Funds
+Mục đích, khoản hỗ trợ, phân bổ, thu chi và công bố
+Payment adapter, Reporting
+Rescue Supplies
+Nhu cầu vật tư, phiếu nhận, lô và phát dùng
+Kho trạm, Shop fulfillment
+Publishing
+Câu chuyện, bản công khai và tệp đã kiểm tra
+Website, liên kết tới kênh
+Shared Platform
+Identity, quyền, thông báo, tệp, audit, payment gateway, outbox
+Cấp dịch vụ dùng chung theo phạm vi
+
+Dữ liệu giao dịch và tác vụ bên ngoài
+Thao tác duyệt ghép khóa bé và ghi placement, sự kiện, outbox trong một transaction. Ghi nhận đóng góp khóa payment và donation, thêm bút toán rồi ghi outbox. Worker xử lý thông báo hoặc đồng bộ sau commit; không giữ khóa database trong lúc gửi email, gọi ngân hàng hoặc API ngoài.
+Chia sẻ thanh toán đúng cách
+Dùng cùng lớp tạo yêu cầu, xác minh callback và đối soát, nhưng mỗi payment_intent có mục đích cố định và liên kết đúng đối tượng. Bản đầu có order_id hoặc donation_id, chỉ một trường được có giá trị với foreign key và CHECK tương ứng. Callback đọc binding đã lưu, không tin nhãn mục đích do trình duyệt gửi.
+Mã giao dịch provider duy nhất trên cả Shop và cứu hộ. Chuyển một callback sang module sai không được tạo khoản thu mới. Nếu đơn vị nhận tiền hoặc tài khoản thanh toán khác nhau, cấu hình merchant và secret theo phạm vi; dùng chung code không mặc định được dùng chung tài khoản thu.
+14 Mô hình dữ liệu và ràng buộc
+Nhóm bảng
+Quan hệ chính
+Ràng buộc
+rescue_reports, rescue_cases, case_reports
+Nhiều tin vào một ca; ca có nhiều hồ sơ bé
+Mã công khai khó đoán; link tra cứu không lộ liên hệ
+animals, animal_identifiers, animal_events
+Định danh xuyên suốt, dấu nhận diện, lịch sử
+animal_code duy nhất; gộp hồ sơ có alias và audit
+care_episodes, intake_records, outcomes
+Một bé có nhiều đợt theo thời gian
+Tối đa một đợt mở; kết quả có ngày và người duyệt
+locations, capacities, location_history
+Vị trí và năng lực theo loại, lịch sử chuyển
+Một vị trí hiện hành; không gán vượt năng lực đã duyệt
+care_entries, medical_records, care_tasks
+Các bản ghi và việc theo bé hoặc đợt
+Version tài liệu, người ghi, completed_at và hướng dẫn nguồn
+adoption_applications, reviews, appointments
+Nhiều hồ sơ cho bé; lịch và kết quả trao đổi
+Một hồ sơ đang hoạt động cho cặp người và bé theo chính sách
+placements, handovers, followups
+Loại chăm sóc tạm, thử hoặc nhận nuôi; bàn giao riêng
+Không có ghép nhận nuôi độc quyền chồng lấn cho cùng bé
+foster_profiles, volunteers, shifts, assignments
+Năng lực hộ, lịch rảnh và phân công
+Chặn vượt năng lực hoặc lịch được xác nhận chồng lấn
+campaigns, donations, allocations
+Chiến dịch, khoản hỗ trợ và phân bổ mục đích
+Allocation không vượt khoản hợp lệ; mục đích có version
+payment_intents, attempts, events, refunds
+Mỗi intent gắn Shop hoặc donation
+Provider reference unique toàn hệ thống; hoàn có hạn mức
+funds, ledger_entries, expenses, settlements
+Sổ phát sinh, chi, đối soát và nghĩa vụ
+Bút toán bù khi sửa; tham chiếu nguồn chống ghi hai lần
+supply_needs, pledges, receipts, supply_lots
+Nhu cầu, cam kết, nhận thực và tồn trạm
+Dòng nhận tham chiếu shipment unique; tách kho bán và kho dùng
+publication_versions, consents, audit, outbox
+Công bố, đồng ý, nhật ký và công việc nền
+Phạm vi đọc rõ; retry không lặp tác động nghiệp vụ
+
+Quy ước triển khai
+Tiền dùng số nguyên VND; thời gian UTC, giao diện Asia/Ho_Chi_Minh. Trường tuổi có giá trị ước tính và ngày đánh giá; không tạo ngày sinh chính xác giả. Dữ liệu chưa biết giữ null kèm trạng thái, không dùng mặc định tạo hiểu nhầm đã xác nhận.
+Dùng unique có điều kiện cho đợt chăm sóc mở và ghép đang hoạt động; transaction khóa các thực thể liên quan theo thứ tự cố định. Chỉ mục phục vụ trạng thái và thời gian chờ, animal_id, campaign_id và tham chiếu giao dịch. Mọi truy vấn riêng tư kiểm tra phạm vi người dùng, không chỉ dựa vào ID khó đoán.
+15 Thiết kế API và hợp đồng xử lý
+Nhóm
+API ví dụ
+Kiểm tra bắt buộc
+Hồ sơ công khai
+GET /rescue/animalsGET /rescue/animals/{slug}
+Chỉ dữ liệu đã công bố; lọc, phân trang và cache theo version
+Báo tin
+POST /rescue/reports
+Rate limit, dữ liệu tối thiểu, idempotency; cấp mã và quyền tra cứu riêng
+Tiếp nhận
+POST /admin/rescue/intakes
+Quyền điều phối, animal_id, đợt đang mở, nguồn và vị trí phù hợp
+Cập nhật chăm sóc
+POST /admin/animals/{id}/care
+Phạm vi phụ trách, tác giả, ngày thực hiện và loại bản ghi
+Nhận nuôi
+POST /rescue/applicationsGET /me/adoption-applications
+Liên hệ đã xác minh, trạng thái bé, đồng ý và chủ hồ sơ
+Duyệt ghép
+POST /admin/applications/{id}/approve
+Khóa bé, kiểm tra version và ghép đang hoạt động, lưu lý do
+Bàn giao
+POST /admin/placements/{id}/handover
+Đúng placement, điều kiện bàn giao, người xác nhận; chống lặp
+Chăm sóc tạm
+POST /admin/foster-placements
+Năng lực theo thời gian, điều kiện bé và lịch không xung đột
+Đóng góp
+POST /rescue/donation-intents
+Chiến dịch đang nhận, số tiền và mục đích được lưu từ server
+Thông báo tiền
+/integrations/{provider}/callback
+Method theo cổng; chữ ký, merchant, reference, amount và binding
+Chi và hiện vật
+POST /admin/expensesPOST /admin/supply-receipts
+Quyền duyệt, ngân sách hoặc số lượng nhận, chứng từ và dedup
+Minh bạch
+GET /rescue/transparency
+Bản đã duyệt, kỳ báo cáo, thời điểm chốt, tệp đã che dữ liệu
+
+Lỗi và xử lý đồng thời
+Các lỗi nghiệp vụ gồm ANIMAL_NOT_AVAILABLE, PLACEMENT_CONFLICT, CAPACITY_FULL, APPLICATION_STATE_CONFLICT, CAMPAIGN_CLOSED, PAYMENT_RECONCILIATION_REQUIRED và PERMISSION_DENIED. Trả mã ổn định, thông điệp dễ hiểu và request_id; không gửi chi tiết riêng tư của hồ sơ xung đột.
+Mọi thao tác tạo khoản thu, duyệt ghép, bàn giao và nhận hiện vật dùng idempotency key gắn người hoặc phạm vi. Cùng key và cùng payload trả kết quả cũ; khác payload bị từ chối. Cập nhật nghiệp vụ dùng version để phát hiện dữ liệu vừa bị người khác sửa.
+Frontend và dữ liệu chậm cập nhật
+UI không dùng cache công khai để quyết định quyền nhận nuôi hoặc số dư quỹ. Khi gửi hồ sơ hoặc đóng góp, backend kiểm tra lại trạng thái. Nếu vừa đóng chiến dịch hoặc vừa ghép bé, hiển thị trạng thái mới và cách tiếp tục. Thanh toán đang xác minh có trang chờ, truy vấn trạng thái và kênh hỗ trợ.
+16 Tác vụ nền bảo mật và phục hồi lỗi
+Tác vụ
+Cách chạy
+Xử lý lỗi
+Thông báo ca mới
+Outbox sau khi lưu tin; điều phối xác nhận đã xem
+Quá thời gian trực đã cấu hình thì nhắc người dự phòng
+Nhắc chăm sóc và lịch hẹn
+Theo occurrence và múi giờ; kiểm tra bản lịch mới nhất
+Lịch đã hủy hoặc bé đã chuyển nơi thì không gửi nhắc cũ
+Theo dõi sau nhận nuôi
+Tạo khi bàn giao, dừng hoặc điều chỉnh khi có thay đổi
+Thiếu phản hồi tạo việc cho người phụ trách, không tự kết luận vi phạm
+Đối soát và báo cáo quỹ
+Theo callback, truy vấn bổ sung và kỳ chốt
+Giao dịch lệch vào danh sách ngoại lệ; có người xử lý
+Đồng bộ trạng thái công khai
+Sau sự kiện đổi trạng thái, làm mới cache và chỉ mục
+Có thể replay; trạng thái giao dịch từ DB vẫn là căn cứ
+Shop sang kho trạm
+Theo phiếu xuất, giao và nhận có tham chiếu
+Nhận lại cùng sự kiện không nhập kho hoặc ghi hỗ trợ hai lần
+
+Phục hồi công việc
+Outbox được ghi cùng transaction với thay đổi nghiệp vụ. Worker nhận việc bằng lease, retry có backoff và lưu kết quả theo khóa nguồn. Có tiến trình tìm công việc quá hạn để phục hồi sau khi worker hoặc queue mất kết nối. Tách hàng đợi ưu tiên cho ca và chăm sóc khỏi gửi newsletter hoặc tạo báo cáo nặng.
+Nếu nhà cung cấp đã thực hiện nhưng phản hồi timeout, dùng tham chiếu cũ để tra cứu trước khi thử lại. Không hứa gửi email đúng một lần khi nhà cung cấp không hỗ trợ chống trùng; ưu tiên bảo đảm tác động tiền, kho và placement không bị lặp.
+Bảo vệ dữ liệu
+Áp dụng quyền tối thiểu và kiểm tra trên mỗi request, phù hợp hướng dẫn OWASP [4]. Ngoài vai trò còn kiểm tra quan hệ phụ trách ca, bé hoặc placement. Tách tài liệu công khai với tài liệu nội bộ, URL tải riêng tư có hạn, kiểm tra nội dung upload, loại metadata định vị ở bản ảnh được công bố.
+Đăng nhập quản trị có MFA, phiên có thể thu hồi, chống CSRF nếu dùng cookie, giới hạn đăng nhập và biểu mẫu. Log che liên hệ, token và thông tin ngân hàng. Kiểm tra đường dẫn file, export, tìm kiếm và ảnh thu nhỏ cùng quyền như màn hình gốc; không để admin Shop đọc dữ liệu cứu hộ ngoài phạm vi được cấp.
+Lưu consent theo mục đích và version. Người đóng góp có thể đổi lựa chọn tên công khai; người nhận nuôi có thể rút đồng ý dùng ảnh cho truyền thông. Điều chỉnh quyền và cache để áp dụng thay đổi. Việc xóa hồ sơ hoặc lưu chứng từ theo thời hạn cần chính sách được chủ trạm rà soát.
+17 Báo cáo và vận hành thực tế
+Định nghĩa chỉ số trước khi hiển thị
+Chỉ số
+Cách tính và giới hạn
+Tin và ca cứu hộ
+Đếm report và case riêng; tin trùng không làm tăng số ca đã xử lý
+Số bé đang chăm sóc
+Đếm animal_id có đợt mở, gồm tại trạm, phòng khám và chăm sóc tạm
+Số lượt tiếp nhận
+Đếm care_episode bắt đầu trong kỳ; bé quay lại được ghi là lượt mới, không danh tính mới
+Nhận nuôi hoàn tất
+Đếm bàn giao nhận nuôi đã xác nhận trong kỳ; tách thử và chăm sóc tạm
+Tỷ lệ quay lại
+Theo nhóm bàn giao và cửa sổ theo dõi xác định; không chia tùy tiện hai tổng của tháng
+Thời gian chăm sóc
+Đợt đã đóng: kết thúc trừ bắt đầu; đợt đang mở hiển thị số ngày hiện tại riêng
+Chăm sóc và năng lực
+Việc quá hạn, bé thiếu người phụ trách, năng lực theo khu và theo loại
+Tiền và hiện vật
+Thu xác nhận, đã đối soát, hoàn, phí, chi, cam kết chi và hiện vật thực nhận tách nhau
+
+Báo cáo kết quả giữ đầy đủ về chủ, chuyển đơn vị, nhận nuôi, qua đời hoặc kết quả khác đã xác minh. Mẫu thông tin ASPCApro phân biệt dữ liệu đầu vào và kết quả của từng động vật [2]. Không dùng một chỉ số thành công duy nhất để che các kết quả khác hoặc thúc ép chuyển trạng thái.
+Vận hành mỗi ngày
+Đầu ca kiểm tra ca khẩn chưa nhận, vị trí và người phụ trách, việc chăm sóc và lịch bàn giao. Cuối ca đối chiếu bàn giao thực tế, ghi việc chưa xong và người tiếp nhận ca sau. Tài chính xử lý giao dịch chưa ghép theo kỳ trực; nội dung cập nhật trạng thái đã thay đổi trước khi quảng bá tiếp.
+Triển khai và khôi phục
+Tách local, staging và production; giữ secret và tài khoản thanh toán riêng. Chạy migration, kiểm thử quyền, callback và nghiệp vụ trên staging. Chỉ mở nhánh quyên góp khi cấu hình thu, hoàn và đối soát đã sẵn sàng; có feature flag để tạm dừng tạo khoản mới mà vẫn nhận callback giao dịch cũ.
+Dùng backup ngoài máy, lưu WAL nếu đặt mục tiêu mất dữ liệu tối đa 15 phút và diễn tập khôi phục. Mục tiêu phục hồi 2 giờ là đề xuất phải đo lại. Sau khôi phục, kiểm tra bàn giao động vật thực tế, tiền đã phát sinh bên ngoài và hiện vật đã nhận trước khi chạy lại job. Lịch sử database cũ không được tự ghi đè thực tế ngoài trạm.
+Khi mất mạng, điều phối có danh sách trực và biểu mẫu bàn giao dự phòng được bảo vệ. Nhập bù phải có mã nghiệp vụ và thời điểm thực tế để chống trùng. Không để sự cố website làm mất người chịu trách nhiệm cho động vật đang được chăm sóc.
+18 Lộ trình xây dựng và phạm vi bản đầu
+Ưu tiên trải nghiệm Trạm cứu hộ ngay từ giai đoạn đầu vì đây là nguồn cộng đồng của website. Hai nhánh được thiết kế đồng thời về tài khoản và điều hướng; mỗi module có mốc nghiệm thu riêng. Không phải đợi hoàn thiện mọi tính năng Shop mới xây hồ sơ bé và quy trình nhận nuôi.
+Giai đoạn
+Đầu ra
+Phụ thuộc và nghiệm thu
+1 Khảo sát và dữ liệu
+Chính sách, mẫu hồ sơ, vai trò, trạng thái, danh sách bé và câu chuyện đã kiểm tra
+Người phụ trách trạm xác nhận quy trình và người trực
+2 Khu công khai
+Header hai nhánh, trang trạm, danh sách bé, chi tiết, báo tin và hướng dẫn
+Ảnh đã duyệt, quyền riêng tư, form có người nhận xử lý
+3 Vận hành cơ bản
+Tiếp nhận, đợt chăm sóc, vị trí, nhật ký, công việc, chăm sóc tạm do admin quản lý
+Không trùng đợt, không gán quá năng lực, có bàn giao ca
+4 Nhận nuôi
+Hồ sơ, trao đổi, lịch, duyệt ghép, bàn giao và theo dõi
+Chống duyệt đồng thời; thử và nhận nuôi phân biệt rõ
+5 Đóng góp và thu chi
+Chiến dịch cơ bản, thu tiền, đối soát, hoàn, chi và báo cáo công khai
+Giao dịch lặp, tiền muộn, phân bổ quỹ và ẩn danh được kiểm tra
+6 Kết nối Shop
+Hiển thị liên kết, chương trình Shop hỗ trợ; P1 mua hàng tặng và checkout góp thêm
+Không ghi trùng tiền hoặc hiện vật; hỗ trợ hoàn một phần
+7 Pilot và phát hành
+Kiểm thử, backup, quyền, giám sát, dữ liệu thật giới hạn và tài liệu vận hành
+Trạm thực hiện một ca, một bàn giao và một kỳ đối soát hoàn chỉnh
+
+Ước lượng và cách chia việc
+Nếu đã có nền tảng tài khoản, hạ tầng và thanh toán của Shop: dự toán bổ sung P0 khoảng 10 đến 14 tuần cho một dev full stack toàn thời gian, có người vận hành trạm tham gia làm rõ nghiệp vụ và nghiệm thu. Nếu xây cả hai từ đầu, cần lập lại kế hoạch chung; không cộng hoặc trừ máy móc hai dự toán. Xác nhận lại sau khi hoàn thành một luồng nhận nuôi và một luồng đối soát mẫu.
+Frontend và backend thống nhất API rồi phát triển theo lát cắt: hồ sơ bé từ admin ra public; tin báo đến phân công; nhận nuôi đến bàn giao; tiền đến sổ và báo cáo. Kiểm thử các tình huống đồng thời trước pilot, không để đến cuối mới nối nghiệp vụ.
+Phần mở rộng sau khi P0 ổn định
+P1 có cổng tình nguyện, chọn lịch trống, nhật ký nhà chăm sóc tạm, nhu cầu hiện vật, nhắc cập nhật và dashboard sâu. P2 có nhiều trạm, tài trợ định kỳ, tìm thú lạc bằng ảnh và gợi ý bé phù hợp. AI chỉ hỗ trợ tìm kiếm hoặc tóm tắt có kiểm tra; quyết định điều trị, duyệt nhận nuôi và chi quỹ vẫn do người có trách nhiệm thực hiện.
+19 Kịch bản nghiệm thu bắt buộc
+Mã
+Tình huống
+Kết quả cần đạt
+R01
+Một ca có ba bé, nhiều người báo cùng ca
+Có ba animal_id, một ca liên kết nhiều tin; không tăng sai thống kê
+R02
+Bé đã nhận nuôi quay lại trạm
+Giữ ID cũ, mở đợt mới, lịch sử nhận nuôi và quay lại còn đầy đủ
+R03
+Hai điều phối gán chỗ cuối đồng thời
+Một yêu cầu thành công; yêu cầu còn lại xử lý phương án khác
+R04
+Hai nhân viên duyệt hai người cho cùng bé
+Chỉ một ghép độc quyền hoạt động; không có hai bàn giao hợp lệ
+R05
+Có yêu cầu xác minh chủ trong lúc ghép
+Dừng thao tác bàn giao theo điều kiện, có người chịu trách nhiệm
+R06
+Hủy lịch hoặc kết thúc chăm sóc tạm
+Không gửi nhắc lịch cũ; vị trí và trách nhiệm được cập nhật
+R07
+Tin khẩn ngoài giờ hoặc không ai nhận
+Hiển thị đúng khả năng hỗ trợ, có kênh dự phòng và danh sách chưa xử lý
+R08
+Callback lặp sau khi tiền đã nhập đối soát tay
+Chỉ một khoản thu và một tác động lên tổng chiến dịch
+R09
+Callback sai số tiền hoặc gắn nhầm Shop
+Không ghi khoản đóng góp; chuyển đối soát và ghi sự kiện
+R10
+Tiền đến sau khi chiến dịch đóng hoặc đủ
+Ghi giao dịch, áp dụng chính sách phần dư, không mất khoản nhận
+R11
+Hoàn tiền retry và chi vượt quỹ hạn chế
+Không hoàn hai lần, không vượt hạn mức hoặc đổi mục đích tùy ý
+R12
+Người đóng góp chọn ẩn danh
+Tên không lộ trong trang, API, export công khai hoặc metadata
+R13
+Hàng tặng đang giao, callback nhận bị lặp
+Chỉ lượng thực nhận được nhập một lần; không tăng tiền quyên góp
+R14
+Đơn Shop hoàn sau khi đã trích hỗ trợ
+Có điều chỉnh theo chính sách và không tính trùng chuyển nội bộ
+R15
+Admin Shop hoặc TNV mở hồ sơ ngoài quyền
+API, file và export đều từ chối, không chỉ ẩn menu
+R16
+Bé đã bàn giao nhưng cache vẫn còn nút đăng ký
+Backend từ chối tạo hồ sơ không hợp lệ; public được làm mới
+R17
+Worker chết giữa xử lý hoặc DB được phục hồi
+Replay có kiểm soát; đối chiếu tiền, bàn giao và hiện vật thực tế
+R18
+Báo cáo có foster, thử, nhận nuôi và quay lại
+Phân loại đúng; nguồn, kỳ chốt và mẫu số có thể truy xuất
+
+Kiểm thử unit cho điều kiện chuyển trạng thái và phân bổ quỹ; integration với PostgreSQL thật cho unique, khóa và rollback; end to end cho public, người đăng ký và admin. Kiểm tra ít nhất trên mobile và desktop. Thử đồng thời bằng request thực, không mô phỏng bằng các thao tác chạy lần lượt.
+20 Điều kiện phát hành và tài liệu tham khảo
+Điều kiện mở vận hành
+Có dữ liệu bé và người phụ trách được xác minh, lịch trực, khu vực hoạt động, năng lực tiếp nhận và đầu mối hỗ trợ. Những gì công khai phải khớp cách trạm đang vận hành.
+Nhận nuôi có chính sách, mẫu bàn giao, quyền duyệt và quy trình theo dõi; trường hợp tìm chủ, trả lại và chuyển đơn vị có người xử lý.
+Trước nhận tiền thật, chốt đơn vị hoặc cá nhân đứng nhận, tài khoản, điều kiện cổng, mục đích quỹ, cách xử lý dư và hoàn, người đối soát và nội dung công bố phù hợp.
+API công khai, file, search, log và export không lộ địa chỉ riêng hoặc hồ sơ nhạy cảm. Chỉ dùng ảnh và câu chuyện có căn cứ quyền công bố.
+Chạy thử đủ vòng ca cứu hộ, nhận nuôi, đóng góp và hiện vật nếu bật. Có monitoring, backup đã khôi phục thử, danh sách ngoại lệ và người trực xử lý.
+Các quyết định cần chốt trước lập trình
+Quyết định
+Mặc định của bản đề xuất
+Mô hình tổ chức
+Một trạm và mạng lưới nhà chăm sóc tạm, chưa cho bên ngoài tự gây quỹ
+Thứ tự ưu tiên
+Trạm cứu hộ và Shop cùng cấp; phát hành từng module khi đủ điều kiện
+Nhận nuôi
+Trao đổi có người xét, một ghép hoạt động mỗi bé, có bàn giao xác nhận
+Thu tiền
+Đóng góp một lần, tách giao dịch Shop; đối soát thủ công hoặc cổng được cấp
+Hiện vật
+P0 ghi nhận từ admin; P1 nhu cầu và mua từ Shop tặng trạm
+Nội dung và liên hệ
+Duyệt trước công khai; giờ trực và đầu mối do trạm cung cấp
+
+Nguồn và phạm vi áp dụng
+Kiến trúc và luồng nghiệp vụ trong tài liệu là đề xuất thiết kế cho dự án. Nguồn chuyên môn dưới đây dùng để tham khảo quản lý hồ sơ, năng lực chăm sóc, nhận nuôi và phân quyền; không được coi là quy định pháp luật Việt Nam hoặc hướng dẫn điều trị cá thể.
+[1] Association of Shelter Veterinarians. Checklist of Key Statements from the 2022 Guidelines. https://www.sheltervet.org/assets/docs/2022-ASV-GL-Checklist.pdf
+[2] ASPCApro. What Animal Data Do You Need. https://www.aspcapro.org/resource/what-animal-data-do-you-need
+[3] Best Friends Animal Society. Program Endorsements, mục Conversation Based Adoption Services. https://bestfriends.org/network/resources-tools/program-endorsements
+[4] OWASP. Authorization Cheat Sheet. https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html
+Tài liệu đồng bộ của dự án: Kế hoạch hệ thống thương mại điện tử bán đồ chó mèo, phiên bản 1.0 ngày 26 tháng 10 năm 2026. Bản Trạm cứu hộ bổ sung module và quy trình; không thay thế tài liệu Shop.

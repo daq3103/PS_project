@@ -16,12 +16,15 @@ from app.modules.analytics.schemas import EventIn
 ZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 EXACT_PAGES = {
     "/",
+    "/shop",
     "/search",
     "/cart",
     "/checkout",
     "/track-order",
     "/login",
     "/register",
+    "/forgot-password",
+    "/reset-password",
     "/account",
     "/account/profile",
     "/account/orders",
@@ -55,8 +58,10 @@ def normalize_page(path: str) -> tuple[str, str] | None:
         if page.startswith(("/tram-cuu-ho", "/account/community", "/account/adoption"))
         else "shop"
     )
-    if page in {"/account", "/account/profile", "/account/addresses", "/login", "/register"}:
+    if page in {"/account", "/account/profile", "/account/addresses", "/login", "/register", "/forgot-password", "/reset-password"}:
         section = "account"
+    if page == "/":
+        section = "platform"
     return page, section
 
 

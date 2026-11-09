@@ -1,4 +1,5 @@
 "use client";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
@@ -18,12 +19,12 @@ export function AdoptionForm({ postId }: { postId: string }) {
     const form = new FormData(e.currentTarget);
     try {
       await api.applyForAdoption(postId, { applicant_name: String(form.get("applicant_name")), applicant_phone: String(form.get("applicant_phone")),
-        applicant_address: String(form.get("applicant_address")), living_condition: String(form.get("living_condition")) }, key);
+        applicant_address: String(form.get("applicant_address")), living_condition: String(form.get("living_condition")), consent: true }, key);
       setSuccess(true);
     } catch (e) { setMessage(e instanceof Error ? e.message : "Không gửi được hồ sơ"); }
     finally { setBusy(false); }
   }
-  return <form onSubmit={submit} onChange={() => setKey(crypto.randomUUID())} className="space-y-4 rounded-sm border border-line p-4">
+  return <ValidatedForm onSubmit={submit} onChange={() => setKey(crypto.randomUUID())} className="space-y-4 rounded-sm border border-line p-4">
     <h2 className="font-display text-xl text-forest">Đăng ký nhận nuôi</h2>
     <p className="text-sm text-ink-muted">Thông tin này chỉ dành cho bạn và nhân viên xử lý hồ sơ.</p>
     {message && <p role="alert" className="text-danger">{message}</p>}
@@ -31,6 +32,7 @@ export function AdoptionForm({ postId }: { postId: string }) {
     <label className="block">Điện thoại<input name="applicant_phone" required type="tel" pattern="\+?[0-9]{9,15}" className="mt-1 w-full rounded-sm border border-line p-2" /></label>
     <label className="block">Địa chỉ<input name="applicant_address" required minLength={5} maxLength={1000} className="mt-1 w-full rounded-sm border border-line p-2" /></label>
     <label className="block">Điều kiện sống và kinh nghiệm chăm sóc<textarea name="living_condition" required minLength={10} maxLength={2000} rows={4} className="mt-1 w-full rounded-sm border border-line p-2" /></label>
+    <label className="flex items-start gap-2 text-sm"><input type="checkbox" required className="mt-1"/>Tôi đồng ý để trạm sử dụng hồ sơ và liên hệ nhằm xét nhận nuôi; việc dùng ảnh cho truyền thông cần sự đồng ý riêng.</label>
     <button disabled={busy} className="rounded-full bg-forest px-5 py-2 text-white disabled:opacity-50">{busy ? "Đang gửi…" : "Gửi hồ sơ"}</button>
-  </form>;
+  </ValidatedForm>;
 }

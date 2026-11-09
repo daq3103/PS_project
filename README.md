@@ -1,4 +1,14 @@
-# Petshop System (v1.3)
+# PetHome — Chăm sóc và kết nối thú cưng
+
+Trang chủ chung tại `/`, Shop tại `/shop`, Trạm cứu hộ tại `/tram-cuu-ho`. Quản trị chung tại `/admin`, tổng quan bán hàng tại `/admin/shop`. Tên hiển thị được khai báo trong `frontend/src/lib/brand.ts`.
+
+Giữ tên thư mục và tài nguyên Docker hiện tại để tiếp tục sử dụng dữ liệu local. Xem [cấu trúc nền tảng](docs/cau-truc-pethome.md).
+
+Chuyển sang máy mới: [Hướng dẫn chạy PetHome bằng Docker](docs/chay-pethome-tren-may-moi.md).
+
+Thiết lập khôi phục tài khoản: [Lấy lại mật khẩu](docs/lay-lai-mat-khau.md).
+
+Quản lý nhân viên: [Phân quyền nhân viên](docs/phan-quyen-nhan-vien.md).
 
 Monorepo FastAPI + Next.js 15 theo thiết kế `thiet-ke-he-thong-v1.3.docx`.
 
@@ -21,7 +31,7 @@ docker compose up --build
 - API docs: http://localhost:8000/docs  
 - Qua Nginx: http://localhost  
 
-Migration chạy tự động khi `fastapi-api` / worker start (`alembic upgrade head`).
+Migration chạy tự động khi `fastapi-api` khởi động (`alembic upgrade head`). Sau khi build lại, dùng `docker compose up -d --build` để thay container đang chạy bằng image mới.
 
 ### Sinh TypeScript từ OpenAPI
 
@@ -64,3 +74,7 @@ curl -s -X PATCH http://localhost:8000/api/v1/variants/VARIANT_ID \
 ## Bỏ qua (làm sau)
 
 Pháp lý / domain / tài khoản GHN–payOS–email DNS — không chặn build phần mềm Tuần 1.
+
+## Hoạt động Trạm cứu hộ
+
+Hồ sơ bé, báo tin ở Hà Nội, chăm sóc, phân công và sổ quỹ nội bộ đã có tại khu vực Trạm cứu hộ. Xem [đối chiếu kế hoạch và hướng dẫn vận hành](docs/doi-chieu-ke-hoach-tram-cuu-ho-2026-10-27.md) để biết quyền cần cấp, cấu hình liên hệ và phần chưa hoàn thiện. Nhận đóng góp trực tuyến đang tắt. [Ảnh giao diện](PetHome-screenshots/README.md) dùng dữ liệu giả, không phải hồ sơ trạm thật.

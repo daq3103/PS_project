@@ -3,10 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.admin.archive import visible
 from app.models.catalog import Category, Product, ProductImage, ProductVariant
 from app.modules.catalog.schemas import (
     CategoryCreate,
@@ -21,7 +22,7 @@ from app.worker.enqueue import enqueue_revalidate_product
 
 
 async def list_categories(session: AsyncSession, *, active_only: bool = False) -> list[Category]:
-    stmt = select(Category).order_by(Category.sort_order, Category.name)
+    stmt = select(Category).where(visible(Category.id, "categories")).order_by(Category.sort_order, Category.name)
     if active_only:
         stmt = stmt.where(Category.is_active.is_(True))
     result = await session.execute(stmt)
@@ -31,8 +32,11 @@ async def list_categories(session: AsyncSession, *, active_only: bool = False) -
 async def create_category(session: AsyncSession, data: CategoryCreate) -> Category:
     existing = await session.scalar(select(Category).where(Category.slug == data.slug))
     if existing:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Category slug already exists")
-    cat = Category(**data.model_dump())
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Danh mục này đã tồn tại. Vui lòng đặt tên khác.")
+    payload = data.model_dump()
+    if "sort_order" not in data.model_fields_set:
+        payload["sort_order"] = int(await session.scalar(select(func.coalesce(func.max(Category.sort_order), -1)))) + 1
+    cat = Category(**payload)
     session.add(cat)
     await session.flush()
     return cat
@@ -43,7 +47,7 @@ async def update_category(
 ) -> Category:
     cat = await session.get(Category, category_id)
     if not cat:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy danh mục.")
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(cat, k, v)
     await session.flush()
@@ -53,31 +57,31 @@ async def update_category(
 async def get_product_by_slug(session: AsyncSession, slug: str) -> Product:
     stmt = (
         select(Product)
-        .where(Product.slug == slug)
+        .where(Product.slug == slug, visible(Product.id, "products"))
         .options(selectinload(Product.variants), selectinload(Product.images))
     )
     product = await session.scalar(stmt)
     if not product:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy sản phẩm.")
     return product
 
 
 async def get_product(session: AsyncSession, product_id: UUID) -> Product:
     stmt = (
         select(Product)
-        .where(Product.id == product_id)
+        .where(Product.id == product_id, visible(Product.id, "products"))
         .options(selectinload(Product.variants), selectinload(Product.images))
     )
     product = await session.scalar(stmt)
     if not product:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy sản phẩm.")
     return product
 
 
 async def get_category_by_slug(session: AsyncSession, slug: str) -> Category:
     cat = await session.scalar(select(Category).where(Category.slug == slug))
     if not cat:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy danh mục.")
     return cat
 
 
@@ -87,16 +91,22 @@ async def list_products(
     category_id: UUID | None = None,
     category_slug: str | None = None,
     status_filter: str | None = None,
+    public_only: bool = False,
     pet_type: str | None = None,
     brand: str | None = None,
     q: str | None = None,
     min_price: int | None = None,
     max_price: int | None = None,
+    life_stage: str | None = None,
+    in_stock: bool = False,
     sort: str = "newest",
     limit: int = 50,
     offset: int = 0,
 ) -> list[Product]:
-    stmt = select(Product).options(selectinload(Product.variants), selectinload(Product.images))
+    stmt = select(Product).where(visible(Product.id, "products")).options(selectinload(Product.variants), selectinload(Product.images))
+
+    if public_only:
+        stmt = stmt.join(Category, Product.category_id == Category.id).where(Category.is_active.is_(True))
 
     if category_slug and not category_id:
         cat = await get_category_by_slug(session, category_slug)
@@ -109,44 +119,49 @@ async def list_products(
         stmt = stmt.where(Product.pet_type.in_([pet_type, "both"]))
     if brand:
         stmt = stmt.where(Product.brand.ilike(brand))
+    if life_stage:
+        stmt = stmt.where(Product.life_stage.in_([life_stage, "all"]))
     if q:
-        term = f"%{q.strip()}%"
+        # Normalize both sides in PostgreSQL; unaccent is installed by the base schema.
+        term = func.unaccent(f"%{q.strip()}%")
         stmt = stmt.where(
             or_(
-                Product.name.ilike(term),
-                Product.brand.ilike(term),
-                Product.short_description.ilike(term),
-                Product.slug.ilike(term),
+                func.unaccent(Product.name).ilike(term),
+                func.unaccent(Product.brand).ilike(term),
+                func.unaccent(Product.slug).ilike(term),
+                select(ProductVariant.id).where(
+                    ProductVariant.product_id == Product.id,
+                    ProductVariant.is_active.is_(True),
+                    func.unaccent(ProductVariant.sku).ilike(term),
+                ).exists(),
             )
         )
 
-    if min_price is not None or max_price is not None:
-        stmt = stmt.join(ProductVariant).where(ProductVariant.is_active.is_(True))
-        if min_price is not None:
-            stmt = stmt.where(ProductVariant.price >= min_price)
-        if max_price is not None:
-            stmt = stmt.where(ProductVariant.price <= max_price)
-
-    if sort == "price_asc":
-        stmt = stmt.order_by(Product.created_at.desc())  # refined after load
+    eligible = [ProductVariant.product_id == Product.id, ProductVariant.is_active.is_(True)]
+    if min_price is not None:
+        eligible.append(ProductVariant.price >= min_price)
+    if max_price is not None:
+        eligible.append(ProductVariant.price <= max_price)
+    if in_stock:
+        eligible.append(ProductVariant.cached_available_qty > 0)
+    if min_price is not None or max_price is not None or in_stock:
+        # EXISTS avoids duplicate product rows consuming the page limit.
+        stmt = stmt.where(select(ProductVariant.id).where(*eligible).exists())
+    display_price = select(func.min(ProductVariant.price)).where(
+        ProductVariant.product_id == Product.id, ProductVariant.is_active.is_(True)
+    ).correlate(Product).scalar_subquery()
+    if sort in ("price_asc", "price_desc"):
+        price_order = display_price.asc() if sort == "price_asc" else display_price.desc()
+        stmt = stmt.order_by(price_order.nulls_last(), Product.id)
     elif sort == "bestseller":
-        stmt = stmt.order_by(Product.total_sold.desc(), Product.created_at.desc())
+        stmt = stmt.order_by(Product.total_sold.desc(), Product.created_at.desc(), Product.id)
     else:
-        stmt = stmt.order_by(Product.created_at.desc())
+        stmt = stmt.order_by(Product.created_at.desc(), Product.id)
 
     stmt = stmt.limit(limit).offset(offset)
     result = await session.execute(stmt)
     products = list(result.scalars().unique().all())
 
-    if sort == "price_asc":
-        products.sort(
-            key=lambda p: min((v.price for v in p.variants if v.is_active), default=10**18)
-        )
-    elif sort == "price_desc":
-        products.sort(
-            key=lambda p: max((v.price for v in p.variants if v.is_active), default=-1),
-            reverse=True,
-        )
     return products
 
 
@@ -156,6 +171,7 @@ async def product_stock_snapshot(session: AsyncSession, product_id: UUID) -> lis
         {
             "variant_id": str(v.id),
             "title": v.title,
+            "unit": v.options.get("unit") or "cái",
             "sku": v.sku,
             "cached_available_qty": v.cached_available_qty,
             "nearest_expiry_date": v.nearest_expiry_date.isoformat()
@@ -171,10 +187,10 @@ async def product_stock_snapshot(session: AsyncSession, product_id: UUID) -> lis
 async def create_product(session: AsyncSession, data: ProductCreate) -> Product:
     existing = await session.scalar(select(Product).where(Product.slug == data.slug))
     if existing:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Product slug already exists")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Sản phẩm này đã tồn tại. Vui lòng đặt tên khác.")
     cat = await session.get(Category, data.category_id)
     if not cat:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid category_id")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Danh mục đã chọn không hợp lệ.")
 
     payload = data.model_dump(exclude={"variants"})
     product = Product(**payload)
@@ -196,6 +212,7 @@ async def update_product(
         setattr(product, k, v)
     await session.flush()
 
+    await session.refresh(product, attribute_names=["updated_at"])
     # After commit, ARQ will revalidate — enqueue registered via session events in router
     product._revalidate_slug = product.slug  # type: ignore[attr-defined]
     product._revalidate_old_slug = old_slug  # type: ignore[attr-defined]
@@ -210,7 +227,7 @@ async def create_variant(
         select(ProductVariant).where(ProductVariant.sku == data.sku)
     )
     if existing:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="SKU already exists")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Mã hàng đã tồn tại.")
     variant = ProductVariant(product_id=product.id, **data.model_dump())
     session.add(variant)
     await session.flush()
@@ -223,10 +240,10 @@ async def update_variant(
     """Returns (variant, product_slug) — price/stock changes trigger ISR revalidate."""
     variant = await session.get(ProductVariant, variant_id)
     if not variant:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Variant not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mẫu sản phẩm.")
     product = await session.get(Product, variant.product_id)
     if not product:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy sản phẩm.")
 
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(variant, k, v)

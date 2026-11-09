@@ -35,6 +35,8 @@ services:
       INTERNAL_API_URL: http://fastapi-api:8000
       REVALIDATE_SECRET: ${REVALIDATE_SECRET}
       TRUST_PROXY_HEADERS: "true"
+      SITE_URL: ${SITE_URL:-}
+      SEO_ALLOW_INDEXING: ${SEO_ALLOW_INDEXING:-false}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -46,7 +48,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --no-proxy-headers
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --no-proxy-headers --no-access-log
     restart: always
     env_file: .env
     environment:

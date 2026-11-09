@@ -19,20 +19,21 @@ router = APIRouter(prefix="/api/v1/me/addresses", tags=["addresses"])
 
 class AddressCreate(BaseModel):
     recipient_name: str = Field(min_length=1, max_length=150)
-    recipient_phone: str = Field(min_length=8, max_length=20)
-    province_id: int = Field(ge=0)
-    province_name: str = Field(min_length=1, max_length=100)
-    district_id: int = Field(ge=0)
-    district_name: str = Field(min_length=1, max_length=100)
-    ward_code: str = Field(min_length=1, max_length=50)
-    ward_name: str = Field(min_length=1, max_length=100)
-    street_address: str = Field(min_length=1, max_length=255)
+    recipient_phone: str = Field(pattern=r"^0[0-9]{9,10}$")
+    province_id: int = Field(default=0, ge=0)
+    province_name: str = Field(default="", max_length=100)
+    district_id: int = Field(default=0, ge=0)
+    district_name: str = Field(default="", max_length=100)
+    ward_code: str = Field(default="", max_length=50)
+    ward_name: str = Field(default="", max_length=100)
+    street_address: str = Field(default="", max_length=255)
+    full_address: str | None = Field(default=None, min_length=10, max_length=255)
     is_default: bool = False
 
 
 class AddressUpdate(BaseModel):
     recipient_name: str | None = Field(default=None, min_length=1, max_length=150)
-    recipient_phone: str | None = Field(default=None, min_length=8, max_length=20)
+    recipient_phone: str | None = Field(default=None, pattern=r"^0[0-9]{9,10}$")
     province_id: int | None = Field(default=None, ge=0)
     province_name: str | None = Field(default=None, min_length=1, max_length=100)
     district_id: int | None = Field(default=None, ge=0)
@@ -40,6 +41,7 @@ class AddressUpdate(BaseModel):
     ward_code: str | None = Field(default=None, min_length=1, max_length=50)
     ward_name: str | None = Field(default=None, min_length=1, max_length=100)
     street_address: str | None = Field(default=None, min_length=1, max_length=255)
+    full_address: str | None = Field(default=None, min_length=10, max_length=255)
     is_default: bool | None = None
 
 
@@ -56,6 +58,7 @@ class AddressOut(BaseModel):
     ward_code: str
     ward_name: str
     street_address: str
+    full_address: str | None
     is_default: bool
     created_at: datetime
 
@@ -89,6 +92,8 @@ async def create_address(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> AddressOut:
+    if not (body.full_address or "").strip() and not all((body.province_name.strip(), body.district_name.strip(), body.ward_name.strip(), body.street_address.strip())):
+        raise HTTPException(422, "Vui lòng nhập địa chỉ nhận hàng đầy đủ.")
     count = await session.scalar(
         select(CustomerAddress.id).where(CustomerAddress.user_id == user.id).limit(1)
     )
@@ -96,6 +101,8 @@ async def create_address(
     if make_default:
         await _clear_defaults(session, user.id)
     payload = body.model_dump()
+    if payload["full_address"] is not None:
+        payload["full_address"] = payload["full_address"].strip()
     payload["is_default"] = make_default
     addr = CustomerAddress(user_id=user.id, **payload)
     session.add(addr)
@@ -114,6 +121,10 @@ async def update_address(
     if not addr or addr.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Địa chỉ không tồn tại")
     data = body.model_dump(exclude_unset=True)
+    if "full_address" in data and data["full_address"] is not None:
+        data["full_address"] = data["full_address"].strip()
+        if len(data["full_address"]) < 10:
+            raise HTTPException(422, "Vui lòng nhập địa chỉ nhận hàng đầy đủ.")
     if data.get("is_default") is True:
         await _clear_defaults(session, user.id)
     for k, v in data.items():

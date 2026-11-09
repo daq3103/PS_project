@@ -44,7 +44,8 @@ def sessions():
 
 async def user(factory, role="customer"):
     async with factory() as session:
-        row = User(id=uuid.uuid4(), full_name="Rescue test", role=role, is_active=True)
+        permissions = {"warehouse_staff": ["warehouse"], "cskh_staff": ["customer_support", "rescue_manage"]}
+        row = User(id=uuid.uuid4(), full_name="Rescue test", role=role, staff_permissions=permissions.get(role, []), is_active=True)
         session.add(row)
         await session.commit()
         return row
@@ -70,6 +71,108 @@ async def published(factory, staff, kind="adoption"):
             await service.admin_moderate(session, post, "approve", staff.id, None)
         await session.commit()
         return post
+
+
+@pytest.mark.asyncio
+async def test_pet_traits_search_filters_dates_and_edit_visibility():
+    from datetime import datetime
+
+    factory = sessions()
+    author = await user(factory)
+    base = post_input().model_dump()
+    base.update(
+        title="Bé xám có vòng cổ đỏ",
+        breed="ALN",
+        color="Trắng ở ngực",
+        last_seen_at=datetime.fromisoformat("2026-10-21T17:05:00+00:00"),
+        pet_details={
+            "colors": ["gray", "white"],
+            "coat_length": "short",
+            "sex": "female",
+            "pattern": "bicolor",
+            "size": "small",
+            "markings": "Đuôi cụt",
+            "age_months": 8,
+            "weight_kg": 2.5,
+        },
+    )
+    async with factory() as session:
+        post = await service.create_post(
+            session, author.id, schemas.CommunityPostCreateIn(**base), str(uuid.uuid4())
+        )
+        await service.admin_moderate(session, post, "approve", author.id, None)
+        await session.commit()
+        ident = post.id
+        assert post.breed == "Mèo Anh lông ngắn"
+        public = schemas.CommunityPostPublicOut.model_validate(post).model_dump()
+        assert public["pet_details"]["weight_kg"] == 2.5
+        assert "search_text" not in public and "contact_phone" not in public
+
+    async def contains(**filters):
+        async with factory() as session:
+            rows, _ = await service.list_public_posts(session, schemas.CommunityFeedQs(**filters))
+            return ident in {row.id for row in rows}
+
+    for filters in (
+        {"q": "ALN xam duoi cut"},
+        {"breed": "british shorthair"},
+        {"colors": "gray,white", "sex": "female", "coat_length": "short"},
+        {"pattern": "bicolor", "size": "small"},
+        {"date_from": "2026-10-22", "date_to": "2026-10-22"},
+    ):
+        assert await contains(**filters)
+    for filters in (
+        {"colors": "gray,black"},
+        {"sex": "male"},
+        {"breed": "Poodle"},
+        {"q": "%"},
+        {"q": "_"},
+        {"date_to": "2026-10-21"},
+    ):
+        assert not await contains(**filters)
+    async with factory() as session:
+        post = await service.get_post(session, ident, lock=True)
+        await service.update_post(
+            session,
+            post,
+            author.id,
+            schemas.CommunityPostUpdateIn(
+                version=post.version,
+                pet_details=schemas.PetDetails(colors=["black"], markings="Tai khuyết"),
+            ),
+        )
+        assert post.moderation_status == "pending"
+        assert post.pet_details["colors"] == ["black"]
+        await session.commit()
+    assert not await contains(q="tai khuyet")
+    async with factory() as session:
+        post = await service.get_post(session, ident, lock=True)
+        await service.admin_moderate(session, post, "approve", author.id, None)
+        await session.commit()
+    assert await contains(q="tai khuyet", colors="black")
+    assert not await contains(q="duoi cut")
+
+
+@pytest.mark.asyncio
+async def test_pet_filter_http_validation_and_catalog():
+    from app.core.database import engine
+    from app.main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        catalog = await client.get("/api/v1/community/pet-options")
+        assert "Mèo Anh lông ngắn" in catalog.json()["breeds"]["cat"]
+        for query in (
+            "colors=pink",
+            "date_from=2026-10-23&date_to=2026-10-22",
+            "coat_length=fluffy",
+        ):
+            response = await client.get("/api/v1/community/posts?" + query)
+            assert response.status_code == 422
+        response = await client.get("/api/v1/community/posts?colors=gray&coat_length=short&limit=1")
+        assert response.status_code == 200
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

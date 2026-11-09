@@ -25,9 +25,9 @@ router = APIRouter(
 )
 
 
-async def admin_out(session, post):
+async def admin_out(session, post, authors=None):
     data = schemas.CommunityPostAdminOut.model_validate(post).model_dump()
-    author = await session.get(User, post.author_user_id)
+    author = authors.get(post.author_user_id) if authors is not None else await session.get(User, post.author_user_id)
     data.update(
         author_name=author.full_name if author else "",
         author_contact=(author.email or author.phone) if author else None,
@@ -38,7 +38,12 @@ async def admin_out(session, post):
 @router.get("/posts", response_model=list[schemas.CommunityPostAdminOut])
 async def posts(qs: schemas.AdminListQs = Depends(), session: AsyncSession = Depends(get_db)):
     rows, _ = await service.admin_list_posts(session, qs)
-    return [await admin_out(session, r) for r in rows]
+    author_ids = {r.author_user_id for r in rows}
+    authors = {
+        author.id: author
+        for author in (await session.scalars(select(User).where(User.id.in_(author_ids)))).all()
+    } if author_ids else {}
+    return [await admin_out(session, r, authors) for r in rows]
 
 
 @router.get("/posts/{post_id}", response_model=schemas.CommunityPostAdminOut)

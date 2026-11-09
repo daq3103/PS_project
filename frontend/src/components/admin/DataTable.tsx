@@ -16,12 +16,18 @@ export function DataTable<T>({
   keyExtractor,
   loading,
   empty,
+  rowClassName,
+  onRowClick,
+  rowAriaLabel,
 }: {
   columns: Column<T>[];
   rows: T[];
   keyExtractor: (row: T) => string;
   loading?: boolean;
   empty?: ReactNode;
+  rowClassName?: (row: T, index: number) => string;
+  onRowClick?: (row: T) => void;
+  rowAriaLabel?: (row: T) => string;
 }) {
   return (
     <div className="overflow-hidden rounded-sm border border-line bg-surface">
@@ -57,8 +63,19 @@ export function DataTable<T>({
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
-                <tr key={keyExtractor(row)} className="hover:bg-forest/[0.02]">
+              rows.map((row, index) => (
+                <tr key={keyExtractor(row)}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  role={onRowClick ? "button" : undefined}
+                  aria-label={onRowClick ? rowAriaLabel?.(row) ?? "Mở chi tiết" : undefined}
+                  onClick={onRowClick ? event => {
+                    if ((event.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+                    onRowClick(row);
+                  } : undefined}
+                  onKeyDown={onRowClick ? event => {
+                    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onRowClick(row); }
+                  } : undefined}
+                  className={`${onRowClick ? "cursor-pointer hover:bg-forest/10 focus-visible:bg-forest/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-forest" : "hover:bg-forest/5"} ${rowClassName?.(row, index) ?? ""}`}>
                   {columns.map((col) => (
                     <td
                       key={col.key}

@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from slugify import slugify
-from sqlalchemy import func, or_, select, text, tuple_
+from sqlalchemy import and_, case, func, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +24,15 @@ from app.models.community import (
     CommunityUpload,
 )
 from app.modules.community import schemas
+from app.modules.community.pet_traits import (
+    ACCENTED,
+    BREEDS,
+    PLAIN,
+    canonical_breed,
+    expand_search,
+    normalize_search,
+    search_document,
+)
 
 POST_TTL = timedelta(days=30)
 ACTIVE_REQUESTS = ("pending", "contacted", "approved")
@@ -148,6 +158,8 @@ def validated_post_values(data):
     from app.modules.community.locations import normalize_location
 
     normalize_location(values)
+    values["breed"] = canonical_breed(values.get("breed"), values["pet_type"])
+    values["search_text"] = search_document(values)
     return values
 
 
@@ -249,6 +261,47 @@ async def list_public_posts(session, filters):
         value = getattr(filters, name)
         if value is not None:
             where.append(getattr(CommunityPost, name) == value)
+    for name in ("coat_length", "pattern", "sex", "size"):
+        value = getattr(filters, name)
+        if value == "unknown":
+            # Historical posts have an empty details object and therefore unknown traits.
+            where.append(func.coalesce(CommunityPost.pet_details[name].astext, "unknown") == value)
+        elif value is not None:
+            where.append(CommunityPost.pet_details.contains({name: value}))
+    if filters.colors:
+        where.append(CommunityPost.pet_details.contains({"colors": filters.colors.split(",")}))
+    if filters.q and filters.q.strip():
+        for word in expand_search(filters.q).split():
+            where.append(CommunityPost.search_text.contains(word, autoescape=True))
+    if filters.breed and filters.breed.strip():
+        normalized = expand_search(filters.breed)
+        breed = func.translate(func.lower(func.coalesce(CommunityPost.breed, "")), ACCENTED, PLAIN)
+        aliases = [normalized]
+        for breeds in BREEDS.values():
+            for name, alternate in breeds:
+                if normalize_search(name) == normalized:
+                    aliases.extend(alternate)
+        if normalized == "khong ro":
+            where.append(or_(breed == "", breed == normalized))
+        else:
+            where.append(
+                or_(
+                    breed.in_(aliases),
+                    and_(*(breed.contains(word, autoescape=True) for word in normalized.split())),
+                )
+            )
+    # Missing event dates are excluded when the user explicitly filters event dates.
+    event = case(
+        (CommunityPost.post_type == "adoption", CommunityPost.created_at),
+        else_=func.coalesce(CommunityPost.last_seen_at, CommunityPost.found_at),
+    )
+    zone = ZoneInfo("Asia/Ho_Chi_Minh")
+    if filters.date_from:
+        where.append(event >= datetime.combine(filters.date_from, datetime.min.time(), zone))
+    if filters.date_to:
+        where.append(
+            event < datetime.combine(filters.date_to, datetime.min.time(), zone) + timedelta(days=1)
+        )
     if filters.cursor:
         try:
             stamp, ident = filters.cursor.split(",")
@@ -259,7 +312,7 @@ async def list_public_posts(session, filters):
                 tuple_(CommunityPost.created_at, CommunityPost.id) < (moment, uuid.UUID(ident))
             )
         except (ValueError, OverflowError) as exc:
-            raise HTTPException(422, "Cursor không hợp lệ") from exc
+            raise HTTPException(422, "Không tải được trang tiếp theo. Vui lòng tải lại danh sách.") from exc
     rows = list(
         (
             await session.scalars(
@@ -432,8 +485,8 @@ async def admin_moderate(session, post, action, moderator_id, reason, version=No
     await notify(
         session,
         post.author_user_id,
-        f"Tin của bạn có kết quả kiểm duyệt: {target}.",
-        "/account/community",
+        f"Tin \"{post.title}\" { {'approved': 'đã được duyệt', 'rejected': 'bị từ chối', 'hidden': 'đã được gỡ'}[target] }.",
+        f"/account/community/{post.id}",
         f"post:{post.id}:moderate:{post.version}",
     )
     await session.flush()
@@ -462,7 +515,7 @@ def adoption_out(row, *, admin=False):
     values = {
         field: getattr(row, field)
         for field in schemas.AdoptionOut.model_fields
-        if field not in {"post_title", "post_slug"}
+        if field not in {"post_title", "post_slug", "consent"}
     }
     values.update(post_title=row.post.title, post_slug=row.post.slug)
     if admin:
@@ -477,6 +530,8 @@ async def create_adoption_request(session, post_id, user_id, data, key):
     if previous:
         return await session.get(AdoptionRequest, previous.resource_id)
     post = await get_post(session, post_id, lock=True)
+    from app.modules.rescue.service import adoption_guard
+    await adoption_guard(session, post_id)
     if post.author_user_id == user_id:
         fail("Không thể đăng ký tin của mình", 403)
     if (
@@ -497,10 +552,13 @@ async def create_adoption_request(session, post_id, user_id, data, key):
     ):
         fail("Đã có hồ sơ đang xử lý hoặc bé đang chờ bàn giao")
     row = AdoptionRequest(
-        **data.model_dump(), post_id=post_id, user_id=user_id, status="pending", post=post
+        **data.model_dump(exclude={"consent"}), post_id=post_id, user_id=user_id, status="pending", post=post
     )
     session.add(row)
     await session.flush()
+    if data.consent:
+        from app.modules.rescue.workflow_service import consent
+        await consent(session, user_id, row.id, "adoption", True)
     save_receipt(session, user_id, "adoption", key, digest, row.id)
     await audit(session, post, user_id, "adoption_create", new="pending", request_id=row.id)
     await notify(
@@ -545,6 +603,12 @@ async def adoption_action(session, request_id, actor_id, data=None, *, withdraw=
         fail("Tin không còn tiếp nhận nhận nuôi")
     if action == "reject" and not (data.reason or "").strip():
         fail("Cần lý do từ chối", 422)
+    if action in {"contact", "approve", "complete"}:
+        from app.modules.rescue.service import adoption_guard
+        await adoption_guard(session, row.post_id)
+    if action in {"approve", "complete"}:
+        from app.modules.rescue.workflow_service import approval_guard
+        await approval_guard(session, row, action)
     if action == "approve" and await session.scalar(
         select(AdoptionRequest.id).where(
             AdoptionRequest.post_id == post.id,
@@ -580,9 +644,11 @@ async def adoption_action(session, request_id, actor_id, data=None, *, withdraw=
     await notify(
         session,
         row.user_id,
-        f"Hồ sơ nhận nuôi đã cập nhật: {target}.",
+        "Hồ sơ nhận nuôi đã cập nhật: " + {"withdrawn":"đã rút", "contacted":"đã liên hệ", "approved":"đã duyệt", "completed":"đã bàn giao", "rejected":"chưa phù hợp"}.get(target, "đang xử lý") + ".",
         "/account/adoption-requests",
         f"adoption:{row.id}:{target}",
     )
     await session.flush()
+    from app.modules.rescue.service import adoption_changed
+    await adoption_changed(session, row.post_id, actor_id, action, row.id)
     return row

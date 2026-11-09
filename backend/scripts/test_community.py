@@ -47,9 +47,52 @@ async def main():
         ).returncode
         if result:
             return result
+        # Verify old free-text rescue posts survive the additive migration and are searchable.
+        probe = await asyncpg.connect(
+            host=configured.host,
+            port=configured.port or 5432,
+            user=configured.username,
+            password=configured.password,
+            database=test_name,
+        )
+        probe_id = await probe.fetchval("SELECT id FROM community_posts LIMIT 1")
+        if probe_id:
+            await probe.execute(
+                "UPDATE community_posts SET breed = 'ALN', title = 'Mèo XÁM Đuôi Cụt' WHERE id = $1",
+                probe_id,
+            )
+        before = await probe.fetch(
+            "SELECT id, title, breed, color, slug FROM community_posts ORDER BY id"
+        )
+        images_before = await probe.fetchval("SELECT count(*) FROM community_post_images")
+        await probe.close()
         # Exercise rollback of only the additive revision, solely on this disposable database.
         subprocess.run([sys.executable, "-m", "alembic", "downgrade", "0002"], env=env, check=True)
         subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], env=env, check=True)
+        probe = await asyncpg.connect(
+            host=configured.host,
+            port=configured.port or 5432,
+            user=configured.username,
+            password=configured.password,
+            database=test_name,
+        )
+        try:
+            assert before == await probe.fetch(
+                "SELECT id, title, breed, color, slug FROM community_posts ORDER BY id"
+            )
+            assert images_before == await probe.fetchval(
+                "SELECT count(*) FROM community_post_images"
+            )
+            if probe_id:
+                old_post = await probe.fetchrow(
+                    "SELECT search_text, pet_details FROM community_posts WHERE id = $1", probe_id
+                )
+                assert "meo xam duoi cut" in old_post["search_text"]
+                assert "meo anh long ngan" in old_post["search_text"]
+                assert old_post["pet_details"] == "{}"
+        finally:
+            await probe.close()
+        print("Migration round-trip: legacy text, images and accent-insensitive search preserved")
         return 0
     finally:
         # Only this randomly named database, created by this process, is removed.

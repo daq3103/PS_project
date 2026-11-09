@@ -1,12 +1,12 @@
 "use client";
+import { ValidatedForm } from "@/components/ValidatedForm";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -26,15 +26,13 @@ export default function RegisterPage() {
       if (password !== confirmPassword) {
         throw new Error("Mật khẩu xác nhận không khớp");
       }
-      const isEmail = identifier.includes("@");
       await api.register({
         full_name: "Người dùng",
         password,
-        email: isEmail ? identifier : undefined,
-        phone: isEmail ? undefined : identifier,
+        username: identifier.trim().toLowerCase(),
       });
-      router.push("/cart");
-      router.refresh();
+      window.dispatchEvent(new Event("petshop:auth"));
+      window.location.assign("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Đăng ký thất bại");
     } finally {
@@ -54,11 +52,15 @@ export default function RegisterPage() {
           Đăng nhập
         </Link>
       </p>
-      <form onSubmit={onSubmit} className="mt-8 space-y-4">
+      <GoogleSignIn />
+      <ValidatedForm onInput={() => setError("")} onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block text-sm">
-          <span className="font-semibold text-ink">Email hoặc số điện thoại</span>
+          <span className="font-semibold text-ink">Tên tài khoản</span>
           <input
             required
+            autoComplete="username"
+            pattern="[a-zA-Z][a-zA-Z0-9_]{2,39}"
+            title="3-40 ký tự: bắt đầu bằng chữ, gồm chữ, số hoặc dấu gạch dưới"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             className="mt-1.5 w-full rounded-sm border border-line bg-surface px-3 py-2.5 outline-none focus:border-forest"
@@ -86,7 +88,7 @@ export default function RegisterPage() {
             className="mt-1.5 w-full rounded-sm border border-line bg-surface px-3 py-2.5 outline-none focus:border-forest"
           />
         </label>
-        {error && <p className="text-sm font-medium text-danger">{error}</p>}
+        {error && <p role="alert" className="text-sm font-medium text-danger">{error}</p>}
         <button
           type="submit"
           disabled={loading}
@@ -94,7 +96,7 @@ export default function RegisterPage() {
         >
           {loading ? "Đang tạo…" : "Đăng ký"}
         </button>
-      </form>
+      </ValidatedForm>
     </div>
   );
 }

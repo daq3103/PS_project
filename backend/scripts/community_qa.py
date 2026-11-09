@@ -57,6 +57,7 @@ async def main():
                 row = User(
                     full_name=f"Community QA {role}",
                     role=role,
+                    staff_permissions=["warehouse"] if role == "warehouse_staff" else [],
                     email=f"{role}-{uuid.uuid4().hex[:8]}@example.com",
                     password_hash=hash_password(password),
                     totp_enabled=role != "customer",

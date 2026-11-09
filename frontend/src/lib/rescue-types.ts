@@ -1,0 +1,3 @@
+export type RescueAnimal={id:string;code:string;slug:string;name:string;species:string;sex:string;age_months:number|null;story:string;care_summary:string;public_area:string;adoption_state:string;adoption_slug?:string|null;images?:{url:string}[];version:number;post_id?:string|null;ownership_hold:boolean;publication?:unknown;profile?:{color?:string;breed?:string;coat?:string;size?:string;video_url?:string;behavior?:string;observed_at?:string;medical_summary?:string};timeline?:{note:string;occurred_at:string}[]};
+export type RescueRow={id:string;[key:string]:unknown};
+export type RescueWorkspace={animals:RescueAnimal[];locations:RescueRow[];reports:RescueRow[];tasks:RescueRow[];cases:RescueRow[];staff:{id:string;name:string}[];adoption_posts:{id:string;title:string}[]};

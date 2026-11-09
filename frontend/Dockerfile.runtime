@@ -1,0 +1,15 @@
+# Package a Linux standalone build produced in a memory-limited build container.
+# BUILD_IMAGE is a local image committed from the completed build container.
+ARG BUILD_IMAGE=pethome-frontend-compiled:local
+FROM ${BUILD_IMAGE} AS compiled
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 TZ=Asia/Ho_Chi_Minh PORT=3000 HOSTNAME=0.0.0.0
+RUN apk add --no-cache tzdata \
+    && cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime \
+    && echo Asia/Ho_Chi_Minh > /etc/timezone
+COPY --from=compiled /app/.next/standalone ./
+COPY --from=compiled /app/.next/static ./.next/static
+COPY --from=compiled /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]

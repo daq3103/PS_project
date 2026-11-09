@@ -1,21 +1,14 @@
-import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-  const accessToken = request.cookies.get("access_token")?.value;
-
-  if (pathname.startsWith("/admin") && !accessToken) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
+export function middleware() {
+  // The server admin layout validates the API session and redirects on the
+  // current origin. A cookie-only redirect here cannot validate that session.
   const response = NextResponse.next();
   response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
   return response;
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/account/:path*", "/cart", "/checkout", "/login", "/register", "/track-order", "/forgot-password", "/reset-password", "/search"],
 };

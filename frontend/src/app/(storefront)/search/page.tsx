@@ -15,28 +15,44 @@ export default async function SearchPage({ searchParams }: Props) {
   const sort = typeof sp.sort === "string" ? sp.sort : "newest";
   const minPrice = typeof sp.min_price === "string" ? sp.min_price : "";
   const maxPrice = typeof sp.max_price === "string" ? sp.max_price : "";
+  const brand = typeof sp.brand === "string" ? sp.brand : "";
+  const lifeStage = typeof sp.life_stage === "string" ? sp.life_stage : "";
+  const inStock = sp.in_stock === "true";
+  const requestedPage = Number(sp.page);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 && requestedPage <= 10000 ? requestedPage : 1;
+  let failed = false;
 
   const qs = new URLSearchParams({
     status: "active",
     sort,
-    limit: "48",
+    limit: "25",
+    offset: String((page - 1) * 24),
   });
   if (q) qs.set("q", q);
   if (petType) qs.set("pet_type", petType);
   if (minPrice) qs.set("min_price", minPrice);
   if (maxPrice) qs.set("max_price", maxPrice);
 
+  if (brand) qs.set("brand", brand);
+  if (lifeStage) qs.set("life_stage", lifeStage);
+  if (inStock) qs.set("in_stock", "true");
   let products: ProductDto[] = [];
   try {
     products = await api.listProducts(qs.toString());
   } catch {
-    products = [];
+    failed = true;
   }
+  const hasNext = products.length > 24;
+  products = products.slice(0, 24);
 
   const filterHref = (next: Record<string, string>) => {
     const params = new URLSearchParams();
     const merged = {
       q,
+      brand,
+      life_stage: lifeStage,
+      in_stock: inStock ? "true" : "",
+      page: "",
       pet_type: petType,
       sort,
       min_price: minPrice,
@@ -48,6 +64,10 @@ export default async function SearchPage({ searchParams }: Props) {
     if (merged.sort && merged.sort !== "newest") params.set("sort", merged.sort);
     if (merged.min_price) params.set("min_price", merged.min_price);
     if (merged.max_price) params.set("max_price", merged.max_price);
+    if (merged.brand) params.set("brand", merged.brand);
+    if (merged.life_stage) params.set("life_stage", merged.life_stage);
+    if (merged.in_stock) params.set("in_stock", merged.in_stock);
+    if (merged.page) params.set("page", merged.page);
     const s = params.toString();
     return s ? `/search?${s}` : "/search";
   };
@@ -55,15 +75,21 @@ export default async function SearchPage({ searchParams }: Props) {
   return (
     <div>
       <h1 className="font-display text-4xl text-ink">Tìm kiếm</h1>
-      <form action="/search" method="get" className="mt-6 flex max-w-xl flex-wrap gap-2">
+      <form action="/search" method="get" className="mt-6 grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
         <input
+          aria-label="Từ khóa tìm kiếm"
           name="q"
           defaultValue={q}
-          placeholder="Tên sản phẩm, thương hiệu…"
-          className="min-w-[12rem] flex-1 rounded-full border border-line bg-surface px-4 py-2.5 outline-none transition duration-200 hover:border-forest/40 focus:border-forest"
+          placeholder="Tên sản phẩm, thương hiệu, mã hàng…"
+          className="w-full min-w-0 rounded-full border border-line bg-surface px-4 py-2.5 outline-none transition duration-200 hover:border-forest/40 focus:border-forest"
         />
         <input type="hidden" name="pet_type" value={petType} />
         <input type="hidden" name="sort" value={sort} />
+        <input type="hidden" name="min_price" value={minPrice} />
+        <input type="hidden" name="max_price" value={maxPrice} />
+        <label className="text-sm">Thương hiệu<input name="brand" defaultValue={brand} maxLength={100} className="mt-1 block w-full rounded-xl border border-line bg-surface px-3 py-2" /></label>
+        <label className="text-sm">Độ tuổi<select name="life_stage" defaultValue={lifeStage} className="mt-1 block w-full rounded-xl border border-line bg-surface px-3 py-2"><option value="">Tất cả độ tuổi</option><option value="baby">Thú cưng nhỏ tuổi</option><option value="adult">Trưởng thành</option><option value="senior">Lớn tuổi</option></select></label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="in_stock" value="true" defaultChecked={inStock} />Chỉ hiện còn hàng</label>
         <button
           type="submit"
           className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-forest-deep hover:shadow-md"
@@ -100,11 +126,11 @@ export default async function SearchPage({ searchParams }: Props) {
 
       <p className="mt-4 text-sm text-ink-muted">
         {q ? `Kết quả cho “${q}”: ` : ""}
-        {products.length} sản phẩm
+        Trang {page} · {products.length} sản phẩm
       </p>
 
-      {products.length === 0 ? (
-        <p className="mt-8 text-ink-muted">Không tìm thấy sản phẩm phù hợp.</p>
+      {failed ? <p role="alert" className="mt-6 text-danger">Chưa tải được danh sách sản phẩm. Vui lòng thử lại sau.</p> : products.length === 0 ? (
+        <p className="mt-8 text-ink-muted">Không tìm thấy sản phẩm phù hợp. <Link href="/search" className="text-forest underline">Bỏ bộ lọc</Link></p>
       ) : (
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => (
@@ -112,6 +138,7 @@ export default async function SearchPage({ searchParams }: Props) {
           ))}
         </div>
       )}
+      {!failed && <nav aria-label="Phân trang sản phẩm" className="mt-8 flex justify-between text-sm text-forest">{page > 1 ? <Link href={filterHref({page: String(page - 1)})}>← Trang trước</Link> : <span />}{hasNext && <Link href={filterHref({page: String(page + 1)})}>Trang sau →</Link>}</nav>}
     </div>
   );
 }

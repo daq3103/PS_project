@@ -5,12 +5,14 @@ import { api, type ReviewOut } from "@/lib/api-client";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
+import { Drawer } from "@/components/admin/Drawer";
 
 export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<ReviewOut[]>([]);
   const [pendingOnly, setPendingOnly] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<ReviewOut | null>(null);
   const { confirm, dialog } = useConfirm();
 
   const load = useCallback(async () => {
@@ -41,6 +43,8 @@ export default function AdminReviewsPage() {
     }
     try {
       await api.adminApproveReview(id, approve);
+      if (selected?.id === id) setSelected(null);
+      setReviews(old => old.flatMap(review => review.id !== id ? [review] : !approve || pendingOnly ? [] : [{...review, is_approved: true}]));
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Thao tác thất bại");
@@ -115,6 +119,7 @@ export default function AdminReviewsPage() {
   return (
     <div>
       {dialog}
+      {selected && <Drawer open onClose={() => setSelected(null)} title={`Đánh giá · ${selected.product_name ?? "Sản phẩm"}`}><div className="space-y-3 text-sm"><p><strong>Người đánh giá:</strong> {selected.reviewer_name}</p><p><strong>Số sao:</strong> {selected.rating}/5</p><p className="whitespace-pre-wrap rounded-lg border border-line bg-surface p-4">{selected.content || "Không có nội dung."}</p><p className="text-ink-muted">{new Date(selected.created_at).toLocaleString("vi-VN")}</p><StatusBadge status={selected.is_approved ? "delivered" : "pending"} /></div></Drawer>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-forest">Duyệt đánh giá</h1>
@@ -137,6 +142,8 @@ export default function AdminReviewsPage() {
           columns={columns}
           rows={reviews}
           keyExtractor={(r) => r.id}
+          onRowClick={setSelected}
+          rowAriaLabel={(r) => `Xem đánh giá của ${r.reviewer_name}`}
           loading={loading}
           empty="Không có đánh giá."
         />

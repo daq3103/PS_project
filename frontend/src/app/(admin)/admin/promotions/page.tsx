@@ -1,10 +1,13 @@
 "use client";
+import { DeleteRecordButton } from "@/components/admin/DeleteRecordButton";
+import { ValidatedForm } from "@/components/ValidatedForm";
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type PromotionOut } from "@/lib/api-client";
 import { formatVnd } from "@/lib/format";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { Drawer } from "@/components/admin/Drawer";
 
 type DiscountType = "percentage" | "fixed_amount" | "free_shipping";
 
@@ -19,6 +22,7 @@ export default function AdminPromotionsPage() {
   const [promos, setPromos] = useState<PromotionOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<PromotionOut | null>(null);
 
   // create form
   const [code, setCode] = useState("");
@@ -83,6 +87,7 @@ export default function AdminPromotionsPage() {
   }
 
   const columns: Column<PromotionOut>[] = [
+    { key: "delete", header: "", cell: (p) => <DeleteRecordButton kind="promotions" id={p.id} onDeleted={load} /> },
     { key: "code", header: "Mã", cell: (p) => <span className="font-mono font-medium">{p.code}</span> },
     {
       key: "type",
@@ -136,6 +141,7 @@ export default function AdminPromotionsPage() {
 
   return (
     <div>
+      {selected && <Drawer open onClose={() => setSelected(null)} title={`Khuyến mãi ${selected.code}`}><dl className="space-y-3 text-sm"><div><dt className="text-ink-muted">Mô tả</dt><dd>{selected.description || "—"}</dd></div><div><dt className="text-ink-muted">Mức giảm</dt><dd>{formatPromoType(selected)}</dd></div><div><dt className="text-ink-muted">Đã dùng / giới hạn</dt><dd>{selected.used_count}{selected.usage_limit == null ? " / không giới hạn" : ` / ${selected.usage_limit}`}</dd></div><div><dt className="text-ink-muted">Bắt đầu</dt><dd>{selected.starts_at ? new Date(selected.starts_at).toLocaleString("vi-VN") : "—"}</dd></div><div><dt className="text-ink-muted">Kết thúc</dt><dd>{selected.expires_at ? new Date(selected.expires_at).toLocaleString("vi-VN") : "—"}</dd></div><div><dt className="text-ink-muted">Trạng thái</dt><dd>{selected.is_active ? "Đang bật" : "Đã tắt"}</dd></div></dl></Drawer>}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-forest">Khuyến mãi</h1>
@@ -144,7 +150,7 @@ export default function AdminPromotionsPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-4">
-        <form onSubmit={onCreate} className="h-fit rounded-sm border border-line bg-surface p-4 lg:col-span-1">
+        <ValidatedForm onSubmit={onCreate} className="h-fit rounded-sm border border-line bg-surface p-4 lg:col-span-1">
           <h2 className="font-display text-xl text-forest">Thêm mã</h2>
           <div className="mt-4 grid gap-3">
             <Field label="Mã" value={code} onChange={setCode} required />
@@ -175,13 +181,15 @@ export default function AdminPromotionsPage() {
           >
             {saving ? "Đang lưu…" : "Tạo mã"}
           </button>
-        </form>
+        </ValidatedForm>
 
         <div className="lg:col-span-3">
           <DataTable
             columns={columns}
             rows={promos}
             keyExtractor={(p) => p.id}
+            onRowClick={setSelected}
+            rowAriaLabel={(p) => `Xem khuyến mãi ${p.code}`}
             loading={loading}
             empty="Chưa có khuyến mãi."
           />

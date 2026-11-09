@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cookies import set_csrf_cookie, set_guest_cookie
@@ -41,6 +41,8 @@ async def add_cart_item(
     ctx: AuthContext = Depends(get_auth_context),
 ) -> CartOut:
     user_id, guest = _ids(ctx)
+    if not user_id:
+        raise HTTPException(401, "Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.")
     cart, minted = await service.add_item(
         session,
         user_id=user_id,

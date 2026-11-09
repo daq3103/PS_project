@@ -4,6 +4,7 @@ import { attachIssueCollectors } from "../helpers/console";
 
 const PAGES = [
   { path: "/", name: "home" },
+  { path: "/shop", name: "shop" },
   { path: "/search", name: "search" },
   { path: "/cart", name: "cart" },
   { path: "/login", name: "login" },

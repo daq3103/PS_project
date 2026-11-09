@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    cpus: Math.max(1, Number(process.env.NEXT_BUILD_CPUS ?? "2")),
+    webpackMemoryOptimizations: true,
+  },
+  async redirects() { return [{source:"/cuu-ho/:path*",destination:"/tram-cuu-ho/:path*",permanent:true}]; },
   async headers() {
     return [
       {
@@ -27,12 +32,12 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value:
               "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com; " +
-              "style-src 'self' 'unsafe-inline'; " +
-              "img-src 'self' data:; " +
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://accounts.google.com; " +
+              "style-src 'self' 'unsafe-inline' https://accounts.google.com; " +
+              "img-src 'self' data: https:; " +
               "font-src 'self'; " +
-              "connect-src 'self' https://challenges.cloudflare.com; " +
-              "frame-src https://challenges.cloudflare.com; " +
+              "connect-src 'self' https://challenges.cloudflare.com https://accounts.google.com; " +
+              "frame-src https://challenges.cloudflare.com https://accounts.google.com; " +
               "frame-ancestors 'none'; " +
               "upgrade-insecure-requests",
           },

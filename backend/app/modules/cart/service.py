@@ -7,7 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import new_guest_token
-from app.models.catalog import Product, ProductVariant
+from app.models.catalog import Product, ProductImage, ProductVariant
 from app.models.commerce import Cart, CartItem
 from app.modules.cart.schemas import CartItemOut, CartOut
 
@@ -20,6 +20,9 @@ async def _get_or_create_cart(
 ) -> tuple[Cart, str | None]:
     """Return cart and possibly newly minted guest_token."""
     minted: str | None = None
+    if user_id or guest_token:
+        await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                              {"key": f"cart:{user_id or guest_token}"})
     if user_id:
         cart = await session.scalar(select(Cart).where(Cart.user_id == user_id))
         if cart:
@@ -143,6 +146,8 @@ async def merge_guest_cart_into_user(
     session: AsyncSession, *, guest_token: str, user_id: UUID
 ) -> None:
     """Gộp giỏ guest → user: cùng variant cộng dồn qty (ON CONFLICT DO UPDATE)."""
+    for key in sorted((f"cart:{user_id}", f"cart:{guest_token}")):
+        await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": key})
     guest_cart = await session.scalar(select(Cart).where(Cart.guest_token == guest_token))
     if not guest_cart:
         return
@@ -152,6 +157,7 @@ async def merge_guest_cart_into_user(
         guest_cart.user_id = user_id
         guest_cart.guest_token = None
         await session.flush()
+        await _clamp_merged_cart(session, guest_cart.id)
         return
 
     await session.execute(
@@ -171,6 +177,14 @@ async def merge_guest_cart_into_user(
     )
     await session.delete(guest_cart)
     await session.flush()
+    await _clamp_merged_cart(session, user_cart.id)
+
+
+async def _clamp_merged_cart(session: AsyncSession, cart_id: UUID) -> None:
+    await session.execute(text("""
+        UPDATE cart_items ci SET qty = LEAST(ci.qty, 99, GREATEST(1, pv.cached_available_qty))
+        FROM product_variants pv WHERE ci.variant_id = pv.id AND ci.cart_id = :cid
+    """), {"cid": cart_id})
 
 
 async def _load_items(session: AsyncSession, cart_id: UUID) -> list[CartItemOut]:
@@ -182,8 +196,14 @@ async def _load_items(session: AsyncSession, cart_id: UUID) -> list[CartItemOut]
         .order_by(CartItem.created_at)
     )
     rows = (await session.execute(stmt)).all()
+    image_rows = (await session.scalars(select(ProductImage)
+        .where(ProductImage.product_id.in_({product.id for _item, _variant, product in rows}))
+        .order_by(ProductImage.sort_order, ProductImage.created_at))).all() if rows else []
     out: list[CartItemOut] = []
     for item, variant, product in rows:
+        image = next((i for i in image_rows if i.product_id == product.id and i.variant_id == variant.id), None)
+        if image is None:
+            image = next((i for i in image_rows if i.product_id == product.id and i.variant_id is None), None)
         available = (
             variant.is_active
             and product.status == "active"
@@ -203,6 +223,7 @@ async def _load_items(session: AsyncSession, cart_id: UUID) -> list[CartItemOut]
                 title=variant.title,
                 product_name=product.name,
                 product_slug=product.slug,
+                image_url=image.r2_url if image else None,
                 unit_price=variant.price,
                 cached_available_qty=variant.cached_available_qty,
                 is_available=available,

@@ -46,6 +46,14 @@ function TrackOrderForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [order, setOrder] = useState<TrackedOrderOut | null>(null);
+  const [email, setEmail] = useState("");
+  const [notice, setNotice] = useState("");
+  async function resend(e: FormEvent) {
+    e.preventDefault(); setLoading(true); setError(""); setNotice("");
+    try { setNotice((await api.requestTrackingLink(orderCode.trim(), email.trim())).message); }
+    catch (e) { setError(e instanceof Error ? e.message : "Chưa gửi được yêu cầu."); }
+    finally { setLoading(false); }
+  }
 
   useEffect(() => {
     const code = searchParams.get("order_code");
@@ -56,6 +64,11 @@ function TrackOrderForm() {
 
   async function lookup(e?: FormEvent) {
     e?.preventDefault();
+    if (!orderCode.trim() || !phone.trim()) {
+      setOrder(null);
+      setError(!orderCode.trim() ? "Vui lòng nhập mã đơn hàng." : "Vui lòng nhập số điện thoại đặt hàng.");
+      return;
+    }
     setLoading(true);
     setError("");
     setOrder(null);
@@ -70,14 +83,26 @@ function TrackOrderForm() {
   }
 
   useEffect(() => {
-    const code = searchParams.get("order_code");
-    const ph = searchParams.get("phone");
-    if (code && ph) void lookup();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
+    const code = searchParams.get("order_code"), ph = searchParams.get("phone");
+    if (token || (code && ph)) {
+      setLoading(true);
+      const request = token ? api.lookupOrder(token) : api.trackOrder(code!, ph!);
+      request.then(setOrder).catch(err => setError(err instanceof Error ? err.message : "Không tra cứu được đơn")).finally(() => setLoading(false));
+    } else {
+      const lastOrder = sessionStorage.getItem("pethome_latest_order_id");
+      if (lastOrder) {
+        setLoading(true);
+        api.getOrder(lastOrder).then(o => {
+          setOrderCode(o.order_code); setPhone(o.customer_phone);
+          return api.trackOrder(o.order_code, o.customer_phone);
+        }).then(setOrder).catch(() => {}).finally(() => setLoading(false));
+      }
+    }
+  }, [searchParams]);
 
   return (
-    <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] -my-8 flex w-screen min-h-[calc(100vh-4rem)] items-start justify-center bg-[#dbe7e0] px-4 py-10 md:-my-10 md:items-center md:py-16">
+    <div className="-mx-4 -my-8 flex min-h-[calc(100vh-4rem)] items-start justify-center bg-[#dbe7e0] px-4 py-10 md:-mx-6 md:-my-10 md:items-center md:py-16">
       <div className="w-full max-w-xl">
         <div className="rounded-sm border border-line bg-surface p-6 shadow-sm transition-shadow duration-200 hover:shadow-md md:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-forest/10 text-forest">
@@ -87,10 +112,10 @@ function TrackOrderForm() {
             Tra cứu đơn hàng
           </h1>
           <p className="mt-2 text-center text-sm text-ink/70">
-            Nhập mã đơn và số điện thoại đặt hàng. Thông tin nhạy cảm được che một phần.
+            Mở liên kết trong email xác nhận, hoặc tra cứu trên thiết bị đã đặt hàng. Bạn cũng có thể đăng nhập để xem đơn của mình.
           </p>
 
-          <form onSubmit={lookup} className="mt-8 space-y-4">
+          <form noValidate onSubmit={lookup} className="mt-8 space-y-4">
             <label className="block text-sm">
               <span className="font-medium text-ink">Mã đơn</span>
               <input
@@ -127,6 +152,8 @@ function TrackOrderForm() {
               {loading ? "Đang tra cứu…" : "Tra cứu"}
             </button>
           </form>
+          <details className="mt-5 text-sm"><summary className="cursor-pointer text-forest">Cần liên kết tra cứu mới?</summary><form onSubmit={resend} className="mt-3 space-y-3"><p className="text-xs leading-6 text-ink-muted">Nhập mã đơn ở trên và email đã dùng khi đặt hàng. Liên kết mới chỉ được gửi tới email nhận đơn.</p><label className="block">Email nhận đơn<input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full rounded-lg border border-line bg-surface p-2" /></label><button disabled={loading || orderCode.trim().length < 6} className="rounded-full border border-forest px-4 py-2 text-forest disabled:opacity-40">Gửi liên kết mới</button></form></details>
+          {notice && <p role="status" className="mt-3 text-sm text-forest">{notice}</p>}
 
           <div className="mt-5 flex items-center justify-between text-xs text-ink-muted">
             <span>Ví dụ: AB12CD34EF</span>
@@ -160,13 +187,13 @@ function TrackOrderForm() {
 
             <dl className="mt-8 space-y-3 border-t border-line pt-6 text-sm">
               <Row label="Mã đơn" value={order.order_code} mono />
-              <Row label="Thanh toán" value={order.payment_status} />
+              <Row label="Thanh toán" value={({unpaid: "Chưa thanh toán", paid: "Đã thanh toán", underpaid: "Cần kiểm tra số tiền", overpaid: "Đã nhận tiền, cần đối chiếu khoản dư"} as Record<string, string>)[order.payment_status] ?? "Đang kiểm tra"} />
               <Row label="Người nhận" value={order.customer_name} />
               <Row label="SĐT" value={order.customer_phone_masked} />
               <Row
                 label="Địa chỉ"
-                value={[
-                  order.shipping_address?.street_address || order.shipping_address?.street,
+                value={order.shipping_address?.street_address || [
+                  order.shipping_address?.street,
                   order.shipping_address?.ward,
                   order.shipping_address?.district,
                   order.shipping_address?.province,

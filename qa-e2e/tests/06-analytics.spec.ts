@@ -1,17 +1,22 @@
 import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { qaTotp } from "../helpers/qa-totp";
 
 const seedPath = path.resolve(__dirname, "../community-qa.json");
-type Credential = { email: string; password: string };
+type Credential = { email: string; password: string; totp: string };
 const seed: Record<string, Credential> = fs.existsSync(seedPath) ? JSON.parse(fs.readFileSync(seedPath, "utf8")) : {};
 test.skip(!seed.owner, "Requires isolated API started with backend/scripts/community_qa.py");
 
 async function login(page: Page, credential: Credential) {
   await page.goto("/login");
-  await page.getByLabel("Email hoặc số điện thoại").fill(credential.email);
+  await page.getByLabel("Tên tài khoản").fill(credential.email);
   await page.getByLabel("Mật khẩu", { exact: true }).fill(credential.password);
   await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  if (credential.email === seed.owner?.email) {
+    await page.getByLabel("Mã xác thực 6 số").fill(qaTotp(credential.totp));
+    await page.getByRole("button", { name: "Xác minh và đăng nhập" }).click();
+  }
   await page.waitForURL(/\/(account|admin)$/);
 }
 
@@ -49,10 +54,10 @@ test("first-party analytics: real events, owner dashboard, privacy and permissio
     await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: info.outputPath("analytics-traffic.png"), fullPage: true });
-    await page.getByRole("button", { name: "Server & API", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Kết nối dịch vụ" })).toBeVisible();
+    await page.getByRole("button", { name: "Tình trạng hệ thống", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Các bộ phận của hệ thống" })).toBeVisible();
     await expect(page.getByText("Kết nối tốt", { exact: true })).toHaveCount(3);
-    await expect(page.getByText("Không lấy được bộ đếm Redis.", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("Chưa lấy được số liệu xử lý.", { exact: false })).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: info.outputPath("analytics-system.png"), fullPage: true });
   } finally { await guest.close(); }
@@ -65,7 +70,7 @@ test("first-party analytics: real events, owner dashboard, privacy and permissio
   await privatePage.goto("/tram-cuu-ho");
   await expect(privatePage.getByRole("heading", { name: "Cùng đưa các bé về nhà" })).toBeVisible();
   await privatePage.getByRole("navigation", { name: "Khu vực chính" }).getByRole("link", { name: "Shop", exact: true }).click();
-  await expect(privatePage).toHaveURL(/\/$/);
+  await expect(privatePage).toHaveURL(/\/shop$/);
   expect(sent).toHaveLength(0);
   await privateContext.close();
 

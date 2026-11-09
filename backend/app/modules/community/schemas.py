@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -33,6 +33,30 @@ class AdoptionMeta(BaseModel):
     neutered: bool | None = None
     health: str | None = Field(default=None, max_length=1000)
     requirements: str | None = Field(default=None, max_length=1000)
+
+
+COLOR = Literal["white", "black", "gray", "yellow", "brown", "orange", "cream"]
+COAT = Literal["short", "medium", "long", "hairless", "unknown"]
+SEX = Literal["male", "female", "unknown"]
+SIZE = Literal["small", "medium", "large", "unknown"]
+PATTERN = Literal["solid", "tabby", "spotted", "bicolor", "tricolor", "tortoiseshell", "unknown"]
+
+
+class PetDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    colors: list[COLOR] = Field(default_factory=list, max_length=7)
+    coat_length: COAT = "unknown"
+    pattern: PATTERN = "unknown"
+    sex: SEX = "unknown"
+    size: SIZE = "unknown"
+    age_months: int | None = Field(default=None, ge=0, le=480)
+    weight_kg: float | None = Field(default=None, gt=0, le=500, allow_inf_nan=False)
+    markings: str | None = Field(default=None, max_length=500)
+
+    @field_validator("colors")
+    @classmethod
+    def unique_colors(cls, value):
+        return list(dict.fromkeys(value))
 
 
 class CommunityImageOut(BaseModel):
@@ -68,6 +92,7 @@ class CommunityPostPublicOut(BaseModel):
     pet_type: PET_TYPE
     breed: str | None
     color: str | None
+    pet_details: PetDetails = Field(default_factory=PetDetails)
     location_detail: str | None
     province_name: str
     district_name: str | None
@@ -118,6 +143,30 @@ class CommunityFeedQs(BaseModel):
     lifecycle_status: LIFECYCLE_STATUS = "open"
     cursor: str | None = None
     limit: int = Field(default=20, ge=1, le=50)
+    q: str | None = Field(default=None, max_length=100)
+    breed: str | None = Field(default=None, max_length=100)
+    colors: str | None = Field(default=None, max_length=60)
+    coat_length: COAT | None = None
+    pattern: PATTERN | None = None
+    sex: SEX | None = None
+    size: SIZE | None = None
+    date_from: date | None = Field(default=None, ge=date(1900, 1, 1), le=date(2100, 12, 31))
+    date_to: date | None = Field(default=None, ge=date(1900, 1, 1), le=date(2100, 12, 31))
+
+    @field_validator("colors")
+    @classmethod
+    def valid_colors(cls, value):
+        from app.modules.community.pet_traits import COLORS
+
+        if value and any(color not in COLORS for color in value.split(",")):
+            raise ValueError("Màu lông không hợp lệ")
+        return value
+
+    @model_validator(mode="after")
+    def ordered_dates(self):
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc")
+        return self
 
 
 class CommunityPostCreateIn(BaseModel):
@@ -128,6 +177,7 @@ class CommunityPostCreateIn(BaseModel):
     pet_type: PET_TYPE
     breed: str | None = Field(default=None, max_length=100)
     color: str | None = Field(default=None, max_length=100)
+    pet_details: PetDetails = Field(default_factory=PetDetails)
     location_detail: str | None = Field(default=None, max_length=500)
     province_id: int
     province_name: str = Field(min_length=2, max_length=100)
@@ -191,6 +241,7 @@ class CommunityPostUpdateIn(BaseModel):
     pet_type: PET_TYPE | None = None
     breed: str | None = Field(default=None, max_length=100)
     color: str | None = Field(default=None, max_length=100)
+    pet_details: PetDetails | None = None
     location_detail: str | None = Field(default=None, max_length=500)
     province_id: int | None = None
     province_name: str | None = Field(default=None, min_length=2, max_length=100)
@@ -217,6 +268,7 @@ class CommunityPostUpdateIn(BaseModel):
             "contact_phone",
             "image_upload_ids",
             "adoption_meta",
+            "pet_details",
         ):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} không được để trống")
@@ -288,6 +340,7 @@ class ReportHandleIn(BaseModel):
 
 
 class AdoptionCreateIn(BaseModel):
+    consent: bool = False
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     applicant_name: str = Field(min_length=2, max_length=150)
     applicant_phone: str = Field(pattern=r"^\+?[0-9]{9,15}$")
@@ -295,7 +348,7 @@ class AdoptionCreateIn(BaseModel):
     living_condition: str = Field(min_length=10, max_length=2000)
 
 
-class AdoptionOut(AdoptionCreateIn):
+class AdoptionOut(BaseModel):
     applicant_name: str
     applicant_phone: str
     applicant_address: str

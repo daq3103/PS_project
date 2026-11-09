@@ -25,6 +25,7 @@ class CartItemOut(BaseModel):
     title: str | None = None
     product_name: str | None = None
     product_slug: str | None = None
+    image_url: str | None = None
     unit_price: int | None = None
     cached_available_qty: int | None = None
     is_available: bool = True

@@ -8,6 +8,22 @@ from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
+
+# One predicate for allocation, cache reconciliation and import/adjustment.
+SELLABLE_LOT_SQL = """
+    AND (il.expiry_date IS NULL OR il.expiry_date >
+         (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + CAST(:shelf_days AS integer))
+    AND (il.expiry_date IS NOT NULL OR NOT EXISTS (
+        SELECT 1 FROM product_variants ev JOIN products ep ON ep.id = ev.product_id
+        WHERE ev.id = il.variant_id AND ep.has_expiry = TRUE
+    ))
+"""
+
+
+def shelf_params() -> dict:
+    return {"shelf_days": get_settings().inventory_min_shelf_life_days}
+
 _INSUFFICIENT = "Không đủ tồn kho cho một hoặc nhiều sản phẩm"
 
 
@@ -19,11 +35,12 @@ async def _refresh_variant_cache(session: AsyncSession, variant_id: UUID) -> Non
                 SELECT SUM(GREATEST(0, il.qty_on_hand - il.qty_reserved))
                 FROM inventory_lots il
                 WHERE il.variant_id = pv.id AND il.status = 'active'
+                """ + SELLABLE_LOT_SQL + """
             ), 0),
             updated_at = NOW()
             WHERE pv.id = :vid
         """),
-        {"vid": variant_id},
+        {"vid": variant_id, **shelf_params()},
     )
 
 
@@ -33,6 +50,10 @@ async def allocate_inventory_fefo(
 ) -> None:
     """Allocate lots FEFO per line item. Items: order_item_id, variant_id, qty (UUIDs as str or UUID)."""
     sorted_items = sorted(order_items, key=lambda x: str(x["variant_id"]))
+    # All stock mutations lock variants before lots, in stable order.
+    for vid in sorted({str(line["variant_id"]) for line in sorted_items}):
+        # NO KEY UPDATE is compatible with FK KEY SHARE locks taken by order_items.
+        await session.execute(text("SELECT id FROM product_variants WHERE id = :vid FOR NO KEY UPDATE"), {"vid": UUID(vid)})
 
     for line in sorted_items:
         order_item_id = line["order_item_id"]
@@ -60,16 +81,17 @@ async def allocate_inventory_fefo(
             lot_row = (
                 await session.execute(
                     text("""
-                        SELECT id, unit_cost, (qty_on_hand - qty_reserved) AS avail
-                        FROM inventory_lots
-                        WHERE variant_id = :vid
-                          AND status = 'active'
-                          AND (qty_on_hand - qty_reserved) > 0
-                        ORDER BY expiry_date ASC NULLS LAST, created_at ASC
-                        FOR UPDATE SKIP LOCKED
+                        SELECT il.id, il.unit_cost, (il.qty_on_hand - il.qty_reserved) AS avail
+                        FROM inventory_lots il
+                        WHERE il.variant_id = :vid
+                          AND il.status = 'active'
+                          AND (il.qty_on_hand - il.qty_reserved) > 0
+                          """ + SELLABLE_LOT_SQL + """
+                        ORDER BY il.expiry_date ASC NULLS LAST, il.created_at ASC, il.id
                         LIMIT 1
+                        FOR UPDATE OF il
                     """),
-                    {"vid": variant_id},
+                    {"vid": variant_id, **shelf_params()},
                 )
             ).first()
 
@@ -133,10 +155,12 @@ async def allocate_inventory_fefo(
                     needed -= int(existing_line)
                 else:
                     raise HTTPException(status.HTTP_409_CONFLICT, detail=_INSUFFICIENT)
+        await _refresh_variant_cache(session, variant_id)
 
 
 async def release_reservations(session: AsyncSession, order_id: UUID) -> None:
     """Release reserved allocations (cancel / expiry)."""
+    await _lock_order_stock(session, order_id)
     rows = (
         await session.execute(
             text("""
@@ -171,16 +195,8 @@ async def release_reservations(session: AsyncSession, order_id: UUID) -> None:
             """),
             {"id": _alloc_id},
         )
-        await session.execute(
-            text("""
-                INSERT INTO stock_movements (lot_id, qty_delta, reason, ref_type, ref_id, note)
-                VALUES (
-                    :lot, :delta, 'order_release', 'order', :oid,
-                    'Reserved release — available restored'
-                )
-            """),
-            {"lot": lot_id, "delta": qty, "oid": order_id},
-        )
+        # A release changes reservations, not physical stock. Its trace is the allocation;
+        # adding a positive stock movement here would falsely report an extra receipt.
         await session.execute(
             text("""
                 UPDATE product_variants
@@ -196,7 +212,17 @@ async def release_reservations(session: AsyncSession, order_id: UUID) -> None:
 
 
 async def deduct_on_pack(session: AsyncSession, order_id: UUID) -> None:
-    """Deduct on-hand when order is packed (reserved → deducted)."""
+    """Deduct at carrier handover (legacy function name retained for compatibility)."""
+    await _lock_order_stock(session, order_id)
+    invalid = await session.scalar(text("""
+        SELECT COUNT(*) FROM lot_allocations la
+        JOIN order_items oi ON oi.id = la.order_item_id
+        JOIN inventory_lots il ON il.id = la.lot_id
+        WHERE oi.order_id = :oid AND la.status = 'reserved'
+          AND NOT (il.status = 'active' """ + SELLABLE_LOT_SQL + """ )
+    """), {"oid": order_id, **shelf_params()})
+    if invalid:
+        raise HTTPException(409, "Lô hàng không còn đủ điều kiện giao. Vui lòng kiểm tra lại kho.")
     rows = (
         await session.execute(
             text("""
@@ -250,3 +276,12 @@ async def deduct_on_pack(session: AsyncSession, order_id: UUID) -> None:
             {"lot": lot_id, "delta": -qty, "oid": order_id},
         )
         await _refresh_variant_cache(session, variant_id)
+
+
+async def _lock_order_stock(session: AsyncSession, order_id: UUID) -> None:
+    await session.execute(text("SELECT id FROM orders WHERE id = :oid FOR UPDATE"), {"oid": order_id})
+    await session.execute(text("""
+        SELECT pv.id FROM product_variants pv
+        WHERE pv.id IN (SELECT variant_id FROM order_items WHERE order_id = :oid)
+        ORDER BY pv.id FOR NO KEY UPDATE
+    """), {"oid": order_id})

@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+from app.core.phone import valid_contact_phone
 
 from app.models.commerce import Order, OrderItem
 
@@ -17,15 +19,24 @@ class CheckoutItemIn(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
+    quote_id: UUID | None = None
     idempotency_key: str = Field(min_length=8, max_length=100)
     customer_name: str = Field(min_length=1, max_length=150)
     customer_phone: str = Field(min_length=8, max_length=20)
-    customer_email: str | None = None
+    customer_email: EmailStr | None = Field(default=None, max_length=255)
     shipping_address: dict[str, Any]
     payment_method: Literal["cod", "vietqr"]
-    customer_note: str | None = None
-    promo_code: str | None = None
-    items: list[CheckoutItemIn] | None = None
+    customer_note: str | None = Field(default=None, max_length=2000)
+    promo_code: str | None = Field(default=None, max_length=50)
+    items: list[CheckoutItemIn] | None = Field(default=None, max_length=100)
+
+    @field_validator("customer_phone")
+    @classmethod
+    def check_customer_phone(cls, value: str) -> str:
+        value = value.strip()
+        if not valid_contact_phone(value):
+            raise ValueError("Số điện thoại không hợp lệ. Vui lòng nhập số liên lạc thật.")
+        return value
 
 
 class OrderItemOut(BaseModel):
@@ -37,6 +48,7 @@ class OrderItemOut(BaseModel):
     qty: int
     unit_price: int
     line_total: int
+    discount_amount: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -61,6 +73,7 @@ class OrderOut(BaseModel):
     coupon_code_snapshot: str | None
     created_at: datetime
     items: list[OrderItemOut] = []
+    tracking_token: str | None = None
 
     @classmethod
     def from_order(cls, order: Order, items: list[OrderItem] | None = None) -> OrderOut:
@@ -105,7 +118,7 @@ class OrderTrackOut(BaseModel):
 
 
 class CancelOrderRequest(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 def mask_phone(phone: str) -> str:
@@ -120,7 +133,7 @@ def mask_phone(phone: str) -> str:
 
 def mask_address(addr: dict[str, Any]) -> dict[str, Any]:
     out = dict(addr)
-    street = str(out.pop("street_address", None) or out.pop("street", None) or "")
+    street = str(out.pop("full_address", None) or out.pop("street_address", None) or out.pop("street", None) or "")
     if len(street) > 6:
         out["street_address"] = street[:3] + "…" + street[-2:]
     elif street:

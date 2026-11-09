@@ -3,27 +3,47 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pyotp
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cookies import set_auth_cookies
 from app.core.database import get_db
-from app.core.deps import require_owner, require_staff_user
+from app.core.deps import (
+    require_cskh_or_owner,
+    require_owner,
+    require_platform_manager,
+    require_shop_staff as require_staff_user,
+    require_warehouse_or_owner,
+)
 from app.core.encryption import encrypt_secret
+from app.core.rate_limit import enforce_rate_limit
 from app.models.catalog import Product, ProductVariant, Review
 from app.models.commerce import Order, OrderStatusHistory, Promotion
-from app.models.fulfillment import Fulfillment
+from app.models.fulfillment import Fulfillment, Payment
 from app.models.inventory import InventoryLot, StockMovement
 from app.models.user import User
-from app.modules.inventory.fefo_service import deduct_on_pack
+from app.modules.customer import auth_service
+from app.modules.inventory.fefo_service import _refresh_variant_cache, deduct_on_pack
+from app.modules.inventory.reconciliation import LOT_BALANCES_SQL
+from app.modules.admin.archive import visible
 from app.modules.order.schemas import OrderOut
 from app.modules.order.state import transition_order
-from app.worker import enqueue as job_enqueue
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -31,11 +51,11 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 class TotpEnrollOut(BaseModel):
     secret: str
     provisioning_uri: str
-    message: str = "Scan with authenticator app, then POST /totp/verify"
+    message: str = "Thêm khóa vào ứng dụng xác thực, rồi nhập mã 6 số để hoàn tất."
 
 
 class TotpVerifyIn(BaseModel):
-    code: str = Field(min_length=6, max_length=8)
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class StockAdjustIn(BaseModel):
@@ -102,6 +122,13 @@ class CreateShipmentIn(BaseModel):
     total_weight_grams: int | None = Field(default=None, ge=1)
 
 
+class ManualShipmentIn(BaseModel):
+    carrier_code: Literal["ghn", "ghtk", "viettel_post", "other"]
+    tracking_code: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+    total_weight_grams: int = Field(ge=1, le=1000000)
+    package_count: int = Field(default=1, ge=1, le=10)
+
+
 class OrderFulfillmentOut(BaseModel):
     carrier_code: str
     tracking_code: str | None = None
@@ -160,37 +187,53 @@ class ReviewApproveIn(BaseModel):
 
 @router.post("/totp/enroll", response_model=TotpEnrollOut)
 async def totp_enroll(
-    user: User = Depends(require_staff_user),
+    response: Response,
+    user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_db),
 ) -> TotpEnrollOut:
     if user.totp_enabled:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="TOTP already enabled")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Xác thực hai bước đã được bật.")
+    await enforce_rate_limit(key=f"rl:owner-enroll:{user.id}", limit=5, window_seconds=60)
+    response.headers["Cache-Control"] = "no-store"
     secret = pyotp.random_base32()
     user.totp_secret_encrypted = encrypt_secret(secret)
     await session.flush()
     totp = pyotp.TOTP(secret)
     label = user.email or user.phone or str(user.id)
-    uri = totp.provisioning_uri(name=label, issuer_name="Petshop Admin")
+    uri = totp.provisioning_uri(name=label, issuer_name="PetHome")
     return TotpEnrollOut(secret=secret, provisioning_uri=uri)
 
 
 @router.post("/totp/verify")
 async def totp_verify(
     body: TotpVerifyIn,
-    user: User = Depends(require_staff_user),
+    request: Request,
+    response: Response,
+    user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, bool]:
+    await enforce_rate_limit(key=f"rl:owner-mfa:{user.id}", limit=5, window_seconds=60)
     if not user.totp_secret_encrypted:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Enroll TOTP first")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Hãy thiết lập xác thực hai bước trước.")
     from app.core.encryption import decrypt_secret_str
 
     secret = decrypt_secret_str(user.totp_secret_encrypted)
     totp = pyotp.TOTP(secret)
     if not totp.verify(body.code, valid_window=1):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid code")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Mã xác thực không đúng.")
     user.totp_enabled = True
-    await session.flush()
+    await auth_service.revoke_refresh(session, raw_refresh=request.cookies.get("refresh_token"))
+    tokens = await auth_service.issue_session(session, user, mfa_verified=True)
+    await session.commit()
+    set_auth_cookies(response, **tokens)
+    response.headers["Cache-Control"] = "no-store"
     return {"totp_enabled": True}
+
+
+@router.get("/totp/status")
+async def totp_status(request: Request, response: Response, user: User = Depends(require_owner)):
+    response.headers["Cache-Control"] = "no-store"
+    return {"totp_enabled": user.totp_enabled, "session_verified": getattr(request.state, "admin_verified", False)}
 
 
 class DashboardKpiOut(BaseModel):
@@ -253,12 +296,9 @@ async def dashboard(
     # drift count
     drift_rows = (
         await session.execute(
-            text("""
+            text(f"""
                 SELECT COUNT(*) AS drift_count FROM (
-                    SELECT il.id, il.qty_on_hand, COALESCE(SUM(sm.qty_delta), 0) AS movements_sum
-                    FROM inventory_lots il
-                    LEFT JOIN stock_movements sm ON sm.lot_id = il.id
-                    GROUP BY il.id, il.qty_on_hand
+                    {LOT_BALANCES_SQL}
                 ) t
                 WHERE qty_on_hand != movements_sum
             """)
@@ -267,7 +307,7 @@ async def dashboard(
     drift_count = int(drift_rows["drift_count"]) if drift_rows else 0
 
     recent_rows = (await session.scalars(
-        select(Order).order_by(Order.created_at.desc()).limit(5)
+        select(Order).where(visible(Order.id, "orders")).order_by(Order.created_at.desc()).limit(5)
     )).all()
     recent: list[OrderListOut] = []
     for o in recent_rows:
@@ -301,18 +341,37 @@ async def dashboard(
 @router.get("/orders", response_model=list[OrderListOut])
 async def list_orders(
     status_filter: str | None = Query(default=None, alias="status"),
+    view: Literal["active", "closed", "all"] = "all",
+    report_metric: Literal["all", "cancelled", "ordered", "delivered", "paid", "discount"] | None = None,
     q: str | None = Query(default=None, max_length=100),
     payment_method: str | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     _staff: User = Depends(require_staff_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[OrderListOut]:
-    stmt = select(Order).order_by(Order.created_at.desc())
+    stmt = select(Order).where(visible(Order.id, "orders")).order_by(Order.created_at.desc())
+    needs_followup = ((Order.status.notin_(("delivered", "cancelled", "returned")))
+        | ((Order.status == "delivered") & (Order.payment_method == "cod")
+           & (Order.payment_status.notin_(("paid", "overpaid")))))
+    if view == "active":
+        stmt = stmt.where(needs_followup)
+    elif view == "closed":
+        stmt = stmt.where(~needs_followup)
     if status_filter:
         stmt = stmt.where(Order.status == status_filter)
+    if report_metric == "cancelled":
+        stmt = stmt.where(Order.status == "cancelled")
+    elif report_metric == "delivered":
+        stmt = stmt.where(Order.status == "delivered")
+    elif report_metric == "ordered":
+        stmt = stmt.where(Order.status != "cancelled")
+    elif report_metric == "paid":
+        stmt = stmt.where(Order.status != "cancelled", Order.payment_status.in_(("paid", "overpaid")))
+    elif report_metric == "discount":
+        stmt = stmt.where(Order.status != "cancelled", Order.discount_amount > 0)
     if q:
         term = f"%{q.strip()}%"
         stmt = stmt.where(
@@ -323,9 +382,9 @@ async def list_orders(
     if payment_method:
         stmt = stmt.where(Order.payment_method == payment_method)
     if date_from:
-        stmt = stmt.where(Order.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=UTC))
+        stmt = stmt.where(Order.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")))
     if date_to:
-        stmt = stmt.where(Order.created_at < datetime.combine(date_to, datetime.max.time(), tzinfo=UTC))
+        stmt = stmt.where(Order.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time(), tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")))
     stmt = stmt.offset(offset).limit(limit)
     rows = (await session.scalars(stmt)).all()
     out: list[OrderListOut] = []
@@ -382,7 +441,7 @@ async def get_order_detail(
 @router.post("/orders/{order_id}/pack", response_model=OrderOut)
 async def pack_order(
     order_id: UUID,
-    staff: User = Depends(require_staff_user),
+    staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> OrderOut:
     order = await session.get(Order, order_id)
@@ -396,18 +455,19 @@ async def pack_order(
         actor_type="staff",
         actor_user_id=staff.id,
     )
-    await deduct_on_pack(session, order_id)
     await session.refresh(order)
     from app.models.commerce import OrderItem
 
     items = (await session.scalars(select(OrderItem).where(OrderItem.order_id == order_id))).all()
-    return OrderOut.from_order(order, list(items))
+    result = OrderOut.from_order(order, list(items))
+    await session.commit()
+    return result
 
 
 @router.post("/orders/{order_id}/ship", response_model=OrderOut)
 async def ship_order(
     order_id: UUID,
-    staff: User = Depends(require_staff_user),
+    staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> OrderOut:
     order = await session.get(Order, order_id)
@@ -421,10 +481,94 @@ async def ship_order(
         actor_type="staff",
         actor_user_id=staff.id,
     )
+    if order.payment_method != "cod" and order.payment_status not in ("paid", "overpaid"):
+        raise HTTPException(409, "Đơn hàng cần được xác nhận đủ tiền trước khi giao.")
+    await deduct_on_pack(session, order_id)
     from app.models.commerce import OrderItem
 
     items = (await session.scalars(select(OrderItem).where(OrderItem.order_id == order_id))).all()
-    return OrderOut.from_order(order, list(items))
+    result = OrderOut.from_order(order, list(items))
+    await session.commit()
+    return result
+
+
+class ManualDeliveryIn(BaseModel):
+    note: str = Field(min_length=10, max_length=500)
+    cod_received: bool = False
+    cod_note: str | None = Field(default=None, max_length=500)
+
+
+class CodReceiptIn(BaseModel):
+    note: str = Field(min_length=10, max_length=500)
+
+
+async def _record_cod_receipt(session: AsyncSession, order: Order, staff: User, note: str) -> None:
+    if order.status != "delivered" or order.payment_method != "cod":
+        raise HTTPException(409, "Chỉ ghi nhận COD cho đơn COD đã giao.")
+    if order.payment_status != "unpaid":
+        raise HTTPException(409, "Đơn đã có ghi nhận thanh toán hoặc đang đối soát.")
+    if not note.strip() or len(note.strip()) < 10:
+        raise HTTPException(422, "Cần ghi căn cứ shop đã thực nhận tiền COD (ít nhất 10 ký tự).")
+    session.add(Payment(order_id=order.id, provider="manual_cod", transaction_type="charge",
+        idempotency_key=f"manual-cod-{order.id}", expected_amount=order.total_amount,
+        actual_amount=order.total_amount, status="succeeded", paid_at=datetime.now(UTC),
+        raw_response={"note": note.strip(), "recorded_by": str(staff.id)}))
+    order.payment_status = "paid"
+    ff = await session.scalar(select(Fulfillment).where(Fulfillment.order_id == order.id)
+                              .order_by(Fulfillment.attempt_no.desc()).limit(1))
+    if ff:
+        ff.cod_reconciled = True
+        ff.cod_reconciled_at = datetime.now(UTC)
+    session.add(OrderStatusHistory(order_id=order.id, from_status="delivered", to_status="delivered",
+        actor_user_id=staff.id, actor_type="staff", note="Shop đã thực nhận COD: " + note.strip()))
+
+
+@router.post("/orders/{order_id}/delivered", response_model=OrderOut)
+async def confirm_manual_delivery(
+    order_id: UUID,
+    body: ManualDeliveryIn,
+    staff: User = Depends(require_warehouse_or_owner),
+    session: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await session.scalar(select(Order).where(Order.id == order_id).with_for_update())
+    if not order:
+        raise HTTPException(404, "Đơn không tồn tại.")
+    if order.status != "shipped":
+        raise HTTPException(409, "Chỉ xác nhận đã giao cho đơn đang giao.")
+    if not body.note.strip():
+        raise HTTPException(422, "Cần ghi căn cứ đã giao từ hãng hoặc người giao.")
+    await transition_order(session, order_id, "shipped", "delivered", "staff", staff.id,
+                           note="Xác nhận giao thành công: " + body.note.strip())
+    await session.refresh(order)
+    ff = await session.scalar(select(Fulfillment).where(Fulfillment.order_id == order_id)
+                              .order_by(Fulfillment.attempt_no.desc()).limit(1))
+    if ff:
+        ff.internal_status = "delivered"
+    if body.cod_received:
+        await _record_cod_receipt(session, order, staff, body.cod_note or "")
+    from app.models.commerce import OrderItem
+    items = (await session.scalars(select(OrderItem).where(OrderItem.order_id == order_id))).all()
+    result = OrderOut.from_order(order, list(items))
+    await session.commit()
+    return result
+
+
+@router.post("/orders/{order_id}/cod-receipt", response_model=OrderOut)
+async def record_cod_receipt(
+    order_id: UUID,
+    body: CodReceiptIn,
+    staff: User = Depends(require_warehouse_or_owner),
+    session: AsyncSession = Depends(get_db),
+) -> OrderOut:
+    order = await session.scalar(select(Order).where(Order.id == order_id).with_for_update())
+    if not order:
+        raise HTTPException(404, "Đơn không tồn tại.")
+    await _record_cod_receipt(session, order, staff, body.note)
+    from app.models.commerce import OrderItem
+    items = (await session.scalars(select(OrderItem).where(OrderItem.order_id == order_id))).all()
+    result = OrderOut.from_order(order, list(items))
+    await session.commit()
+    return result
 
 
 @router.post("/orders/{order_id}/shipments", status_code=status.HTTP_202_ACCEPTED)
@@ -432,7 +576,7 @@ async def create_shipment(
     order_id: UUID,
     body: CreateShipmentIn,
     background_tasks: BackgroundTasks,
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     order = await session.get(Order, order_id)
@@ -440,23 +584,44 @@ async def create_shipment(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Đơn không tồn tại")
     if order.status not in ("confirmed", "packed", "shipped"):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Đơn chưa sẵn sàng tạo vận đơn")
-    background_tasks.add_task(
-        job_enqueue.enqueue_create_shipment,
-        order_id,
-        body.carrier_code,
-        body.package_count,
-        body.total_weight_grams,
-    )
+    from app.core.config import get_settings
+    if body.carrier_code != "mock_ghn" or get_settings().app_env != "development":
+        raise HTTPException(409, "Vui lòng nhập vận đơn đã tạo với hãng vận chuyển.")
+    from app.worker.commerce_outbox import record_job
+    await record_job(session, "create_shipment", str(order_id), {"order_id": str(order_id), "carrier_code": body.carrier_code,
+        "package_count": body.package_count, "total_weight_grams": body.total_weight_grams})
     return {"status": "enqueued", "order_id": str(order_id)}
+
+
+@router.post("/orders/{order_id}/manual-shipment", status_code=201)
+async def manual_shipment(order_id: UUID, body: ManualShipmentIn, staff: User = Depends(require_warehouse_or_owner), session: AsyncSession = Depends(get_db)):
+    order = await session.scalar(select(Order).where(Order.id == order_id).with_for_update())
+    if not order or order.status not in ("confirmed", "packed"):
+        raise HTTPException(409, "Đơn hàng chưa sẵn sàng ghi nhận vận đơn.")
+    existing = await session.scalar(select(Fulfillment).where(Fulfillment.order_id == order_id).limit(1))
+    if existing:
+        raise HTTPException(409, "Đơn đã có vận đơn. Vui lòng kiểm tra trước khi tạo lại.")
+    duplicate = await session.scalar(select(Fulfillment.id).where(Fulfillment.tracking_code == body.tracking_code))
+    if duplicate:
+        raise HTTPException(409, "Mã vận đơn này đã được dùng cho đơn khác.")
+    shipment = Fulfillment(order_id=order_id, carrier_code=body.carrier_code, tracking_code=body.tracking_code,
+        total_weight_grams=body.total_weight_grams, package_count=body.package_count,
+        cod_amount=order.total_amount if order.payment_method == "cod" else 0,
+        internal_status="ready_to_pick", attempt_no=1)
+    session.add(shipment)
+    session.add(OrderStatusHistory(order_id=order_id, from_status=order.status, to_status=order.status,
+        actor_user_id=staff.id, actor_type="staff", note=f"Ghi nhận vận đơn {body.carrier_code}: {body.tracking_code}"))
+    await session.flush()
+    return {"id": str(shipment.id), "tracking_code": shipment.tracking_code}
 
 
 @router.get("/lots")
 async def list_lots(
     variant_id: UUID | None = None,
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    stmt = select(InventoryLot).order_by(InventoryLot.expiry_date.asc().nulls_last())
+    stmt = select(InventoryLot).where(visible(InventoryLot.id, "lots")).order_by(InventoryLot.expiry_date.asc().nulls_last())
     if variant_id:
         stmt = stmt.where(InventoryLot.variant_id == variant_id)
     lots = (await session.scalars(stmt)).all()
@@ -478,12 +643,22 @@ async def list_lots(
 @router.post("/lots", status_code=status.HTTP_201_CREATED)
 async def create_lot(
     body: LotCreateIn,
-    staff: User = Depends(require_staff_user),
+    staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     variant = await session.get(ProductVariant, body.variant_id)
     if not variant:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Variant not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy mẫu sản phẩm.")
+    product = await session.get(Product, variant.product_id)
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    if product and product.has_expiry and body.expiry_date is None:
+        raise HTTPException(422, "Sản phẩm này cần có hạn sử dụng khi nhập lô.")
+    if body.expiry_date and body.expiry_date <= today:
+        raise HTTPException(422, "Không thể nhập lô hàng đã hết hạn để bán.")
+    if body.manufactured_date and body.expiry_date and body.manufactured_date >= body.expiry_date:
+        raise HTTPException(422, "Ngày sản xuất cần trước hạn sử dụng.")
+    await session.execute(select(ProductVariant.id).where(ProductVariant.id == variant.id).with_for_update(key_share=True))
 
     lot = InventoryLot(
         variant_id=body.variant_id,
@@ -511,14 +686,8 @@ async def create_lot(
             note=body.note or "Lot import",
         )
     )
-    await session.execute(
-        text("""
-            UPDATE product_variants
-            SET cached_available_qty = cached_available_qty + :q, updated_at = NOW()
-            WHERE id = :vid
-        """),
-        {"q": body.qty, "vid": body.variant_id},
-    )
+    await _refresh_variant_cache(session, body.variant_id)
+    await session.commit()
     return {"id": str(lot.id), "lot_no": lot.lot_no}
 
 
@@ -531,7 +700,7 @@ async def list_stock_movements(
     date_to: date | None = Query(default=None),
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> list[StockMovementOut]:
     sql = """
@@ -593,18 +762,22 @@ async def list_stock_movements(
 @router.post("/stock/adjust")
 async def adjust_stock(
     body: StockAdjustIn,
-    staff: User = Depends(require_staff_user),
+    staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     lot = await session.get(InventoryLot, body.lot_id)
     if not lot:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Lot not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy lô hàng.")
+    if not body.note or not body.note.strip():
+        raise HTTPException(422, "Vui lòng ghi lý do điều chỉnh kho.")
+    await session.execute(select(ProductVariant.id).where(ProductVariant.id == lot.variant_id).with_for_update(key_share=True))
+    lot = await session.scalar(select(InventoryLot).where(InventoryLot.id == body.lot_id).with_for_update().execution_options(populate_existing=True))
 
     new_on_hand = lot.qty_on_hand + body.qty_delta
     if new_on_hand < lot.qty_reserved:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Would go below reserved qty")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Số lượng còn lại không thể thấp hơn số đã giữ cho đơn hàng.")
     if new_on_hand < 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid adjustment")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Số lượng điều chỉnh không hợp lệ.")
 
     lot.qty_on_hand = new_on_hand
     session.add(
@@ -617,28 +790,18 @@ async def adjust_stock(
             note=body.note,
         )
     )
-    await session.execute(
-        text("""
-            UPDATE product_variants pv
-            SET cached_available_qty = COALESCE((
-                SELECT SUM(GREATEST(0, il.qty_on_hand - il.qty_reserved))
-                FROM inventory_lots il
-                WHERE il.variant_id = pv.id AND il.status = 'active'
-            ), 0),
-            updated_at = NOW()
-            WHERE pv.id = :vid
-        """),
-        {"vid": lot.variant_id},
-    )
+    await session.flush()
+    await _refresh_variant_cache(session, lot.variant_id)
+    await session.commit()
     return {"status": "ok", "lot_id": str(lot.id)}
 
 
 @router.get("/promotions", response_model=list[dict])
 async def list_promotions(
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_platform_manager),
     session: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    promos = (await session.scalars(select(Promotion).order_by(Promotion.created_at.desc()))).all()
+    promos = (await session.scalars(select(Promotion).where(visible(Promotion.id, "promotions")).order_by(Promotion.created_at.desc()))).all()
     return [
         {
             "id": str(p.id),
@@ -659,7 +822,7 @@ async def list_promotions(
 @router.post("/promotions", status_code=status.HTTP_201_CREATED)
 async def create_promotion(
     body: PromotionCreateIn,
-    _owner: User = Depends(require_owner),
+    _owner: User = Depends(require_platform_manager),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     promo = Promotion(
@@ -677,6 +840,7 @@ async def create_promotion(
     )
     session.add(promo)
     await session.flush()
+    await session.commit()
     return {"id": str(promo.id), "code": promo.code}
 
 
@@ -684,12 +848,12 @@ async def create_promotion(
 async def update_promotion(
     promotion_id: UUID,
     body: PromotionUpdateIn,
-    _owner: User = Depends(require_owner),
+    _owner: User = Depends(require_platform_manager),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     promo = await session.get(Promotion, promotion_id)
     if not promo:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Promotion not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy chương trình khuyến mãi.")
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(promo, k, v)
@@ -706,7 +870,7 @@ async def update_promotion(
 @router.get("/reviews")
 async def list_reviews(
     pending_only: bool = Query(default=False),
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_cskh_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     stmt = (
@@ -737,41 +901,35 @@ async def list_reviews(
 async def approve_review(
     review_id: UUID,
     body: ReviewApproveIn,
-    staff: User = Depends(require_staff_user),
+    staff: User = Depends(require_cskh_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     review = await session.get(Review, review_id)
     if not review:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Review not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Không tìm thấy đánh giá.")
     if not body.approve:
         await session.delete(review)
         await session.flush()
+        await session.commit()
         return {"id": str(review_id), "is_approved": False, "deleted": True}
     review.is_approved = True
     review.approved_by = staff.id
     await session.flush()
+    await session.commit()
     return {"id": str(review.id), "is_approved": True}
 
 
 @router.get("/reports/drift")
 async def drift_report(
-    _staff: User = Depends(require_staff_user),
+    _staff: User = Depends(require_warehouse_or_owner),
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Compare Σ stock_movements vs inventory_lots.qty_on_hand per lot."""
     rows = (
         await session.execute(
-            text("""
+            text(f"""
                 SELECT * FROM (
-                    SELECT
-                        il.id AS lot_id,
-                        il.lot_no,
-                        il.variant_id,
-                        il.qty_on_hand,
-                        COALESCE(SUM(sm.qty_delta), 0)::int AS movements_sum
-                    FROM inventory_lots il
-                    LEFT JOIN stock_movements sm ON sm.lot_id = il.id
-                    GROUP BY il.id, il.lot_no, il.variant_id, il.qty_on_hand
+                    {LOT_BALANCES_SQL}
                 ) t
                 ORDER BY ABS(qty_on_hand - movements_sum) DESC, lot_no
             """)

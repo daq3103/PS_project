@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,28 @@ class Settings(BaseSettings):
     revalidate_secret: str = "change_me"
     nextjs_revalidate_url: str = "http://localhost:3000/api/revalidate"
 
+    app_public_url: str = ""
+    google_client_id: str = ""
+    password_reset_email_provider: Literal["resend", "gmail"] = "resend"
+    gmail_user: str = ""
+    gmail_app_password: SecretStr = SecretStr("")
+    resend_api_key: str = ""
+    resend_from: str = ""
+    payment_provider: str = "payos"
+    rescue_donations_enabled: bool = False
+    rescue_automation_paused: bool = False
+    rescue_recipient_name: str = ""
+    rescue_bank_name: str = ""
+    rescue_bank_account: str = ""
+    rescue_merchant_id: str = ""
+    rescue_webhook_secret: str = ""
+    rescue_fund_policy_confirmed: bool = False
+    payos_client_id: str = ""
+    payos_api_key: str = ""
+    payos_checksum_key: str = ""
+    shipping_base_fee: int = Field(default=25000, ge=0, le=10000000)
+    shipping_per_kg_fee: int = Field(default=5000, ge=0, le=1000000)
+
     # Webhook secrets
     mock_vietqr_webhook_secret: str = ""
     mock_ghn_webhook_secret: str = ""
@@ -47,6 +70,7 @@ class Settings(BaseSettings):
     # SQLAlchemy pool (4 workers × ~10 + headroom for cron ≤ max_connections=120)
     db_pool_size: int = 10
     db_max_overflow: int = 5
+    inventory_min_shelf_life_days: int = Field(default=0, ge=0, le=3650)
 
     @property
     def cors_origin_list(self) -> list[str]:

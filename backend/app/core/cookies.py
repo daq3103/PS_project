@@ -50,10 +50,12 @@ def set_auth_cookies(
         samesite="lax",
         path="/",
     )
+    response.set_cookie("session_present", "1", max_age=settings.jwt_refresh_ttl_days * 24 * 3600,
+                        httponly=False, secure=_secure(), samesite="lax", path="/")
 
 
 def clear_auth_cookies(response: Response) -> None:
-    for name in ("access_token", "refresh_token", "csrf_token"):
+    for name in ("access_token", "refresh_token", "csrf_token", "session_present"):
         response.delete_cookie(name, path="/")
 
 

@@ -11,13 +11,11 @@ export default function AccountAddressesPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<AddressOut | null>(null);
 
   const [recipientName, setRecipientName] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
-  const [provinceName, setProvinceName] = useState("Hà Nội");
-  const [districtName, setDistrictName] = useState("");
-  const [wardName, setWardName] = useState("");
-  const [street, setStreet] = useState("");
+  const [addressText, setAddressText] = useState("");
   const [isDefault, setIsDefault] = useState(true);
 
   const load = useCallback(async () => {
@@ -43,32 +41,45 @@ export default function AccountAddressesPage() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
+    if (addressText.trim().length < 10) {
+      setError("Vui lòng nhập địa chỉ đầy đủ, gồm số nhà/đường và khu vực nhận hàng.");
+      return;
+    }
+    if (!/^0[0-9]{9,10}$/.test(recipientPhone.trim())) {
+      setError("SĐT người nhận không hợp lệ. Vui lòng nhập 10–11 chữ số, bắt đầu bằng 0.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      await api.createAddress({
+      const body = {
         recipient_name: recipientName.trim(),
         recipient_phone: recipientPhone.trim(),
-        province_id: 1,
-        province_name: provinceName.trim(),
-        district_id: 1,
-        district_name: districtName.trim(),
-        ward_code: "1",
-        ward_name: wardName.trim(),
-        street_address: street.trim(),
+        full_address: addressText.trim(),
         is_default: isDefault,
-      });
+      };
+      if (editing) await api.updateAddress(editing.id, body);
+      else await api.createAddress(body);
+      setEditing(null);
       setRecipientName("");
       setRecipientPhone("");
-      setDistrictName("");
-      setWardName("");
-      setStreet("");
+      setAddressText("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lưu địa chỉ thất bại");
     } finally {
       setSaving(false);
     }
+  }
+
+  function edit(address: AddressOut | null) {
+    setEditing(address);
+    setRecipientName(address?.recipient_name ?? "");
+    setRecipientPhone(address?.recipient_phone ?? "");
+    setAddressText(address ? address.full_address || [address.street_address, address.ward_name, address.district_name, address.province_name].filter(Boolean).join(", ") : "");
+    setIsDefault(address?.is_default ?? true);
+    setError("");
+    document.getElementById("address-form")?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   async function makeDefault(id: string) {
@@ -98,13 +109,11 @@ export default function AccountAddressesPage() {
         </Link>
       </div>
 
-      <form onSubmit={onCreate} className="mt-8 grid max-w-xl gap-3 sm:grid-cols-2">
+      <form id="address-form" onSubmit={onCreate} className="mt-8 grid max-w-xl gap-3 sm:grid-cols-2">
+        {editing && <p className="font-semibold sm:col-span-2">Sửa địa chỉ của {editing.recipient_name}</p>}
         <Field label="Người nhận" value={recipientName} onChange={setRecipientName} required />
         <Field label="SĐT" value={recipientPhone} onChange={setRecipientPhone} required />
-        <Field label="Tỉnh / TP" value={provinceName} onChange={setProvinceName} required />
-        <Field label="Quận / Huyện" value={districtName} onChange={setDistrictName} required />
-        <Field label="Phường / Xã" value={wardName} onChange={setWardName} required />
-        <Field label="Địa chỉ" value={street} onChange={setStreet} required />
+        <div className="sm:col-span-2"><Field label="Địa chỉ đầy đủ (số nhà, đường, phường/xã, tỉnh/thành phố)" value={addressText} onChange={setAddressText} required /></div>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input
             type="checkbox"
@@ -119,12 +128,13 @@ export default function AccountAddressesPage() {
             disabled={saving}
             className="rounded-full bg-forest px-5 py-2 text-sm font-medium text-white hover:bg-forest-deep disabled:opacity-60"
           >
-            {saving ? "Đang lưu…" : "Thêm địa chỉ"}
+            {saving ? "Đang lưu…" : editing ? "Lưu thay đổi" : "Thêm địa chỉ"}
           </button>
+          {editing && <button type="button" disabled={saving} onClick={() => edit(null)} className="ml-4 text-sm underline">Hủy sửa</button>}
         </div>
       </form>
 
-      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
+      {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
       {loading && <p className="mt-6 text-ink-muted">Đang tải…</p>}
 
       <ul className="mt-10 divide-y divide-line border-y border-line text-sm">
@@ -138,14 +148,15 @@ export default function AccountAddressesPage() {
                 ) : null}
               </p>
               <p className="text-ink-muted">
-                {a.street_address}, {a.ward_name}, {a.district_name}, {a.province_name}
+                {a.full_address || [a.street_address, a.ward_name, a.district_name, a.province_name].filter(Boolean).join(", ")}
               </p>
             </div>
             <div className="flex gap-2">
+              <button type="button" disabled={saving} onClick={() => edit(a)} className="rounded-lg px-3 py-2 text-forest transition hover:bg-forest/10">Sửa</button>
               {!a.is_default && (
                 <button
                   type="button"
-                  className="text-forest hover:underline"
+                  className="rounded-lg px-3 py-2 text-forest transition hover:bg-forest/10"
                   onClick={() => void makeDefault(a.id)}
                 >
                   Đặt mặc định
@@ -153,7 +164,7 @@ export default function AccountAddressesPage() {
               )}
               <button
                 type="button"
-                className="text-danger hover:underline"
+                className="rounded-lg px-3 py-2 text-danger transition hover:bg-danger/10"
                 onClick={() => void remove(a.id)}
               >
                 Xoá

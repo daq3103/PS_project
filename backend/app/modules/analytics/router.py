@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.deps import require_owner
+from app.core.deps import require_platform_manager
 from app.core.rate_limit import client_ip, enforce_rate_limit
 from app.core.redis import redis_cache
 from app.modules.analytics import service, system
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 admin_router = APIRouter(
     prefix="/api/v1/admin/analytics",
     tags=["admin-analytics"],
-    dependencies=[Depends(require_owner)],
+    dependencies=[Depends(require_platform_manager)],
 )
 
 
@@ -57,7 +57,7 @@ async def collect(event: EventIn, request: Request, session: AsyncSession = Depe
 async def traffic(
     response: Response,
     days: int = Query(default=7, ge=1, le=90),
-    section: Literal["all", "shop", "rescue", "account"] = "all",
+    section: Literal["all", "platform", "shop", "rescue", "account"] = "all",
     session: AsyncSession = Depends(get_db),
 ):
     response.headers["Cache-Control"] = "no-store"

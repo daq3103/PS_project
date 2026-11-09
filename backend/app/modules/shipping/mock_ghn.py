@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import secrets
 from typing import Any
 
 from app.core.redis import redis_cache
@@ -55,7 +54,7 @@ class MockGHNProvider(ShippingProvider):
         cod_amount: int,
         attempt_no: int,
     ) -> dict[str, Any]:
-        tracking = f"GHN{secrets.token_hex(6).upper()}{attempt_no}"
+        tracking = f"GHN{hashlib.sha256(f'{order_id}:{attempt_no}'.encode()).hexdigest()[:12].upper()}{attempt_no}"
         fee = await self.quote_fee(
             shipping_address=shipping_address,
             total_weight_grams=total_weight_grams,

@@ -1,0 +1,558 @@
+Kế hoạch hệ thống thương mại điện tử bán đồ chó mèo
+Chức năng sản phẩm và thiết kế xử lý nghiệp vụ
+Phiên bản đề xuất 1.0  •  Ngày 26 tháng 10 năm 2026
+Mục tiêu là xây dựng một website có thể vận hành toàn bộ chu trình bán hàng: tìm sản phẩm, đặt mua, thu tiền, xuất kho, giao hàng, hỗ trợ và hoàn tiền. Tài liệu phục vụ việc chia công việc cho frontend, backend, kiểm thử và người vận hành cửa hàng.
+Đề xuất khởi đầu: một cửa hàng, một kho, một backend chia module rõ ràng; PostgreSQL giữ dữ liệu giao dịch, worker chạy tác vụ nền. Ưu tiên tính đúng đắn của đơn hàng, tiền và tồn kho trước các tính năng cá nhân hóa.
+Phạm vi mặc định
+Thị trường Việt Nam, giao diện tiếng Việt, giá VND; bán thức ăn, cát vệ sinh, đồ chơi, quần áo, chuồng và phụ kiện. Một đơn giao một địa chỉ, một kiện hoặc một vận đơn ở bản đầu.
+Có tài khoản khách và mua không cần đăng ký; thanh toán COD và một cổng online. Có admin, kho, chăm sóc khách hàng và người phụ trách đối soát.
+Dịch vụ spa, đặt lịch khám, marketplace nhiều người bán, bán thú sống, thuốc thú y và thiết bị định vị không nằm trong bản đầu. Nếu thêm sẽ có module và quy trình riêng.
+Mức
+Phạm vi
+Kết quả
+P0
+Danh mục, SKU, giỏ, checkout, đơn, tiền, kho, giao hàng, quyền, hỗ trợ cơ bản
+Có thể nhận và xử lý đơn thật
+P1
+Đánh giá, yêu thích, hồ sơ thú cưng, mua lại, nhập CSV, CMS, báo cáo sâu
+Tăng trải nghiệm và hiệu quả vận hành
+P2
+Tích điểm, nhắc mua định kỳ, gợi ý, chatbot, nhiều kho
+Mở rộng sau khi luồng bán hàng ổn định
+
+Cách sử dụng kế hoạch
+Các ngưỡng thời gian, tải và lịch triển khai trong tài liệu là đề xuất để thiết kế và kiểm thử, không phải số đo đã đạt. Trước khi lập trình cần chốt chính sách giá, giao hàng, đổi trả, hạn dùng tối thiểu và nhà cung cấp tích hợp. Các trang sau mô tả đủ cả chức năng nhìn thấy và cách hệ thống xử lý bên trong.
+
+1 Chức năng mua sắm và danh mục
+Mã
+Chức năng
+Xử lý và điều kiện hoàn thành
+CAT01 P0
+Trang chủ
+Banner có lịch hiển thị; nhóm chó và mèo; danh mục; sản phẩm nổi bật do admin chọn. Không hiển thị nút mua cho hàng ngừng bán.
+CAT02 P0
+Danh sách và tìm kiếm
+Tìm tên, thương hiệu, SKU; xử lý có dấu và không dấu. Lọc theo loài, danh mục, tuổi, size, giá, tồn kho; phân trang; giữ bộ lọc trên URL.
+CAT03 P0
+Chi tiết sản phẩm
+Ảnh, mô tả, thành phần, hướng dẫn, xuất xứ, thương hiệu, biến thể, giá, tình trạng hàng, chính sách. Thuộc tính theo loại sản phẩm.
+CAT04 P0
+Chọn biến thể
+Khách chọn đủ trọng lượng, size, màu hoặc hương vị mới thêm giỏ. Giá, ảnh và khả dụng lấy theo đúng SKU.
+CAT05 P1
+So sánh và yêu thích
+So sánh các sản phẩm cùng nhóm bằng thuộc tính có cấu trúc; lưu yêu thích theo tài khoản.
+CAT06 P1
+Đánh giá
+Chỉ người có dòng hàng đã giao được gắn nhãn đã mua. Một đánh giá cho một dòng hàng, cho phép sửa; duyệt spam, lưu lý do ẩn.
+
+Danh mục được đề xuất
+Chó và mèo là bộ lọc đối tượng sử dụng. Nhóm hàng gồm thức ăn khô, thức ăn ướt, bánh thưởng, cát và vệ sinh, đồ chơi, quần áo, dây dắt, giường chuồng, bát ăn và đồ chăm sóc. Một sản phẩm có thể phù hợp nhiều loài hoặc nhiều nhóm, nhưng cần một danh mục chính để điều hướng.
+Quy tắc nội dung và tìm kiếm
+Các thuộc tính quan trọng phải được lưu thành trường dữ liệu; không chỉ viết trong mô tả. Sản phẩm không có thông tin độ tuổi không được tự gắn là phù hợp mọi độ tuổi.
+Thức ăn hiển thị hướng dẫn của nhà sản xuất và thành phần đã kiểm tra. Bảng size quần áo có số đo ngực, cổ và chiều dài lưng; cân nặng chỉ là tham khảo.
+Tìm kiếm bản đầu sử dụng PostgreSQL với chuẩn hóa tiếng Việt và chỉ mục phù hợp; đưa công cụ tìm kiếm riêng vào khi đo được nhu cầu về độ chính xác hoặc tốc độ.
+Nghiệm thu mẫu: chọn túi 2 kg phải đổi đúng giá, ảnh nếu có và tồn của SKU 2 kg; chọn màu xanh size M không được thêm nhầm size L. Trang không có kết quả phải cho phép bỏ bộ lọc hoặc tìm lại.
+
+2 Tài khoản và trải nghiệm sau mua
+Mức
+Chức năng
+Nguyên tắc xử lý
+P0
+Đăng ký và đăng nhập
+Email và mật khẩu, xác minh email, quên mật khẩu, đăng xuất và thu hồi phiên. Đăng nhập quản trị có MFA.
+P0
+Mua không đăng ký
+Lưu giỏ bằng định danh phiên; email nhận thông tin đơn. Xem đơn qua liên kết token đủ mạnh, có hạn dùng; không chỉ dùng mã đơn và số điện thoại.
+P0
+Địa chỉ và liên hệ
+Nhiều địa chỉ, một địa chỉ mặc định; kiểm tra trường bắt buộc. Danh mục địa chỉ có thể cập nhật theo đơn vị vận chuyển.
+P0
+Giỏ và thanh toán
+Đổi số lượng, xóa hàng, áp mã, tính phí ship, chọn COD hoặc online; hiển thị tổng cuối cùng trước đặt đơn.
+P0
+Đơn của tôi
+Lịch sử, timeline, vận đơn, trạng thái tiền; yêu cầu hủy khi còn được phép; yêu cầu hỗ trợ hoặc đổi trả.
+P1
+Mua lại
+Tạo giỏ từ đơn cũ nhưng kiểm tra lại giá và tồn hiện tại; báo sản phẩm ngừng bán hoặc đổi quy cách.
+P1
+Hồ sơ thú cưng
+Tên, loài, ngày sinh hoặc tuổi ước tính, cân nặng, giống tùy chọn, sở thích. Chỉ chủ tài khoản được xem và sửa.
+
+Gộp giỏ và gắn đơn khách vãng lai
+Khi đăng nhập, gộp các dòng cùng SKU rồi kiểm tra lại số lượng, tồn và giá. Không tự áp lại mã giảm giá hết hạn. Chỉ gắn đơn mua không đăng ký vào tài khoản sau khi xác minh quyền sở hữu email nhận đơn; không gắn chỉ vì người dùng nhập cùng địa chỉ email.
+Hỗ trợ khách hàng
+P0 cung cấp biểu mẫu hỗ trợ liên kết với đơn, chủ đề, nội dung và ảnh minh chứng; nhân viên trả lời qua hệ thống hoặc kênh liên hệ đã cấu hình. Trạng thái gồm mở, đang xử lý, chờ khách và đóng. Chat trực tiếp là P1; hiển thị rõ giờ hỗ trợ và việc tin nhắn đã được tiếp nhận.
+Cá nhân hóa có kiểm soát
+P1 lọc hàng theo loài và tuổi đã khai báo. P2 có nhắc mua lại theo chu kỳ khách tự chọn và quyền hủy đăng ký nhận tin. Thông tin dị ứng hoặc chế độ ăn đặc biệt nếu thu thập chỉ phục vụ bộ lọc do người dùng chọn; không tự suy diễn chẩn đoán hoặc kê chế độ điều trị.
+Nghiệm thu mẫu: khách A đổi URL sang mã đơn của B vẫn bị từ chối; link tra cứu hết hạn có cách xin link mới; lỗi gửi email không làm mất đơn đã tạo.
+
+3 Quản trị và vận hành cửa hàng
+Vai trò
+Quyền cần có
+Giới hạn
+Chủ cửa hàng
+Cấu hình, phân quyền, giá, báo cáo, duyệt hoàn tiền
+Thao tác nhạy cảm yêu cầu xác thực lại và có nhật ký
+Nội dung
+Danh mục, mô tả, ảnh, banner, bài viết
+Không truy cập hoàn tiền, thông tin thanh toán hay cấp quyền
+Nhân viên kho
+Nhập lô, kiểm đếm, đóng gói, xuất hàng, nhận hàng trả
+Không sửa giá bán hoặc đánh dấu đã nhận tiền
+Chăm sóc khách
+Tra cứu đơn, trao đổi, tạo yêu cầu hủy và đổi trả
+Chỉ xem dữ liệu cần thiết; không tự duyệt mọi khoản hoàn
+Đối soát
+Xem giao dịch, đối soát COD và cổng thanh toán, thực hiện hoàn đã duyệt
+Không sửa hàng đã xuất hoặc xóa lịch sử
+
+Các màn hình quản trị P0
+Tổng quan: đơn cần xử lý, chờ xác minh tiền, lỗi vận đơn, hàng sắp hết, lô gần hết hạn, yêu cầu hỗ trợ. Mỗi cảnh báo mở được danh sách chi tiết.
+Sản phẩm: tạo nháp, khai báo biến thể, ảnh, giá, trọng lượng gửi hàng; duyệt hiển thị, ngừng bán, xem lịch sử chỉnh sửa. Không xóa cứng SKU đã xuất hiện trong đơn.
+Kho: nhà cung cấp, phiếu nhập, lô hàng, hạn dùng, giá vốn, số lượng, kiểm kê và điều chỉnh có lý do. Cảnh báo theo ngưỡng cho từng SKU.
+Đơn: bộ lọc, trạng thái, chi tiết tiền và hàng, ghi chú nội bộ, phiếu lấy hàng, đóng gói, mã vận đơn, lịch sử xử lý; tạo đơn hộ khách qua cùng quy tắc checkout.
+Khuyến mại và cấu hình: mã giảm giá, phí ship theo vùng, ngưỡng freeship, điều kiện COD, trang chính sách, mẫu email và thông tin liên hệ.
+Báo cáo và tài chính
+Tách giá trị đơn đặt, doanh thu hàng đã giao sau giảm giá và trả hàng, tiền đã thu, tiền COD còn phải thu, phí ship và phí cổng. Đây là báo cáo vận hành; phương pháp ghi nhận kế toán cần cấu hình với người phụ trách tài chính. Lợi nhuận ước tính phải sử dụng giá vốn tại thời điểm xuất, không lấy giá vốn hiện tại.
+Chỉ số P1: tỷ lệ mua trên phiên, tỷ lệ checkout thành công, giá trị đơn bình quân, mua lại, hủy đơn và hoàn hàng. Ghi rõ mẫu số và khoảng thời gian; dữ liệu hành vi có thể thiếu do người dùng không đồng ý theo dõi.
+Nghiệm thu mẫu: nhân viên kho gọi trực tiếp API hoàn tiền cũng bị từ chối; mỗi điều chỉnh kho và tiền lưu người thực hiện, thời gian, lý do, trước và sau.
+
+4 Mô hình sản phẩm và tồn kho
+Sản phẩm khác với SKU và lô hàng
+Product mô tả một dòng hàng. Variant hoặc SKU là đơn vị khách mua. Lot là một lô nhập của SKU, có hạn dùng và giá vốn riêng. Ví dụ một loại hạt mèo có SKU túi 400 g và túi 2 kg; riêng túi 2 kg có thể có hai lô với hai hạn sử dụng khác nhau.
+Đối tượng
+Trường chính
+Ràng buộc
+Product
+Tên, slug, loài, danh mục, thương hiệu, mô tả, hướng dẫn, ảnh, trạng thái
+Slug duy nhất; thuộc tính khai báo theo nhóm hàng
+Variant
+SKU, trọng lượng tịnh, hương vị, size, màu, giá, khối lượng gửi hàng, kích thước kiện
+SKU duy nhất; không lặp tổ hợp thuộc tính trong cùng product
+Lot
+SKU, nhà cung cấp, ngày nhập, số lô, hạn dùng, giá vốn, trạng thái chất lượng
+Hàng có hạn dùng phải có expiry; lô lỗi hoặc quá hạn không được bán
+Stock balance
+Kho, lô, số thực có, số đã giữ, số không đủ điều kiện bán
+Mỗi kho và lô có một bản ghi; các lượng không âm
+Reservation
+Đơn, lô, số lượng, loại giữ hàng, hạn giữ, trạng thái
+Một lần giải phóng hoặc xuất; không tự hết hạn sau khi đã cam kết
+Stock movement
+Nhập, xuất, điều chỉnh, cách ly, hoàn về, chuyển trạng thái
+Bút toán có tham chiếu duy nhất; sửa sai bằng bút toán bù
+
+Tồn khả dụng và hạn dùng
+Tồn có thể bán = lượng thực có đủ điều kiện bán − lượng đang giữ. Hàng cách ly, hỏng, quá hạn hoặc không đáp ứng hạn dùng tối thiểu còn lại không nằm trong lượng đủ điều kiện bán. Tổng theo SKU được cộng từ các lô đáp ứng điều kiện.
+Phân bổ theo FEFO: ưu tiên lô hết hạn sớm hơn nhưng vẫn đáp ứng ngày giao dự kiến cộng biên hạn dùng tối thiểu của cửa hàng. Chặn lô thiếu dữ liệu bắt buộc; hàng không có hạn dùng áp dụng quy tắc nhập trước xuất trước hoặc quy tắc lấy hàng đã chốt.
+Quy tắc quan trọng
+Giữ hàng khi tạo đơn hợp lệ; không giữ khi khách chỉ thêm giỏ. Đơn online có thời hạn chờ trả tiền; COD có thời hạn xác nhận. Đơn đã thanh toán hoặc xác nhận chuyển sang giữ hàng đã cam kết.
+Bàn giao cho hãng vận chuyển mới giảm lượng thực có và giảm lượng đã giữ trong cùng giao dịch. Hủy trước bàn giao chỉ giải phóng lượng giữ. Hàng hoàn về chỉ được nhập lại sau kiểm tra.
+
+5 Kiến trúc hệ thống được đề xuất
+Dùng modular monolith: một ứng dụng backend với ranh giới module và giao diện gọi nội bộ rõ ràng. API và worker có thể chạy thành các tiến trình riêng nhưng dùng cùng mô hình nghiệp vụ. Cách này phù hợp bản đầu vì thao tác đơn, kho và coupon có thể nằm trong một giao dịch dữ liệu.
+Thành phần
+Lựa chọn đề xuất
+Trách nhiệm
+Web khách và admin
+Next.js cùng một repository, route và quyền tách biệt
+Hiển thị, nhập liệu, trạng thái tải và lỗi; không quyết định giá hay quyền
+API nghiệp vụ
+FastAPI
+Xác thực, định giá, đặt đơn, giữ kho, kiểm tra chuyển trạng thái, trả dữ liệu
+Cơ sở dữ liệu
+PostgreSQL
+Nguồn dữ liệu chính cho hàng, tiền, đơn, quyền và nhật ký
+Cache và hàng đợi
+Redis
+Cache có hạn dùng, giới hạn tần suất, truyền job; không là nơi duy nhất lưu nghiệp vụ
+Worker và scheduler
+Tiến trình nền có retry
+Outbox, thông báo, đối soát, cập nhật vận đơn, giải phóng giữ hàng hết hạn
+Ảnh và tệp
+Object storage và CDN
+Ảnh sản phẩm công khai; ảnh khiếu nại riêng tư qua URL có hạn
+Cổng vào
+Reverse proxy và HTTPS
+Định tuyến web và API, giới hạn request, bảo vệ endpoint; DB chỉ ở mạng riêng
+
+Các module backend
+Identity quản lý tài khoản và quyền. Catalog quản lý nội dung và SKU. Pricing tính giá, coupon và phí. Inventory quản lý lô và giữ hàng. Orders điều phối đơn. Payments quản lý lần thanh toán, hoàn và đối soát. Shipping quản lý vận đơn. Support xử lý khiếu nại. Content, Notifications và Reporting hỗ trợ vận hành.
+Mỗi module ghi dữ liệu thuộc trách nhiệm của mình qua service; không để route frontend hoặc callback tự sửa nhiều bảng tùy ý. Orders gọi Inventory và Pricing trong transaction cục bộ. Thanh toán và hãng vận chuyển đi qua lớp adapter để thay nhà cung cấp mà không sửa nghiệp vụ chính.
+Luồng kết nối
+Trình duyệt gọi web và API qua HTTPS. API đọc hoặc ghi PostgreSQL; chỉ đọc Redis khi dữ liệu phù hợp để cache. Transaction nghiệp vụ đồng thời ghi outbox. Worker đọc outbox, gửi job và gọi nhà cung cấp. Callback bên ngoài quay về API, được xác thực, lưu và xử lý chống trùng. Không giữ transaction dữ liệu mở trong lúc đợi mạng ngoài.
+Mở rộng khi có bằng chứng: thêm replica API, worker và cache trước; chỉ tách service riêng khi một module có nhu cầu tải, đội ngũ hoặc vòng đời phát hành độc lập.
+
+6 Thiết kế dữ liệu và quan hệ
+Nhóm bảng
+Quan hệ và dữ liệu
+Ràng buộc quan trọng
+users, roles, permissions, sessions, addresses
+User có nhiều địa chỉ và phiên; vai trò gắn tập quyền
+Email chuẩn hóa duy nhất; session thu hồi được
+products, categories, brands, variants, media
+Product có nhiều variant; category qua bảng liên kết
+SKU và slug duy nhất; variant có FK product
+suppliers, warehouses, lots, stock_balances
+Variant có nhiều lot; balance theo kho và lot
+Unique warehouse_id + lot_id; CHECK số lượng
+reservations, stock_movements
+Đơn giữ nhiều lô; movement liên kết nguyên nhân
+Khóa tham chiếu chống ghi hai lần
+carts, cart_items, checkout_quotes
+Giỏ có các SKU; quote có tổng và thời hạn
+Unique cart_id + variant_id; quantity > 0
+orders, order_items, order_events
+Đơn lưu snapshot tên hàng, giá, địa chỉ và chính sách
+order_no duy nhất; tiền và phiên bản dữ liệu bất biến sau chốt
+payment_attempts, payment_events, refunds
+Đơn có nhiều lần thử; refund gắn khoản đã thu
+Unique provider + transaction_ref; tổng hoàn không vượt đã thu
+shipments, shipment_events, returns, return_items
+Vận đơn, lịch sử giao; hàng trả theo dòng và số lượng
+Unique provider + tracking_code; nhận trả không vượt đã giao
+promotions, coupon_reservations, coupon_redemptions
+Giữ lượt dùng rồi tiêu thụ khi đơn đủ điều kiện
+Giới hạn toàn hệ thống và từng khách kiểm tra nguyên tử
+support_tickets, messages, audit_logs
+Trao đổi hỗ trợ và lịch sử thao tác
+Phân quyền theo đối tượng; audit không sửa tùy tiện
+outbox_events, job_runs, idempotency_keys
+Sự kiện cần xử lý, lần chạy job, kết quả request
+Unique scope + key; payload hash chống tái dùng sai
+
+Chuẩn dữ liệu
+Tiền VND dùng số nguyên đồng ở nội bộ, không dùng float. Adapter chuyển đơn vị theo đúng tài liệu cổng thanh toán. Thời gian lưu UTC, hiển thị Asia/Ho_Chi_Minh; hạn dùng theo ngày địa phương. Dùng ID nội bộ khó đoán nhưng vẫn kiểm tra quyền sở hữu.
+Lập chỉ mục cho SKU, slug, order_no, orders(user_id, created_at), orders(status, created_at), reservations(status, expires_at), outbox(status, next_attempt_at). Tạo migration có version và kiểm tra kế hoạch truy vấn với dữ liệu gần thực tế.
+P1 bổ sung pets, wishlists, reviews và nội dung CMS. P2 bổ sung loyalty_ledger, reminder_subscriptions và recommendation_events. Không dùng cột số dư đơn lẻ cho tích điểm; phải có sổ phát sinh để hoàn tác khi trả hàng.
+
+7 API và giao diện sử dụng
+Nhóm API
+Ví dụ
+Điều kiện xử lý
+Xác thực
+POST /auth/loginPOST /auth/password-reset
+Giới hạn tần suất, không lộ email tồn tại, token reset một lần
+Danh mục
+GET /productsGET /products/{slug}
+Phân trang, bộ lọc hợp lệ, chỉ hàng được công bố
+Giỏ
+GET /cartPUT /cart/items/{variant_id}
+Kiểm tra quyền phiên, quantity nguyên dương, giá chỉ tham khảo
+Báo giá
+POST /checkout/quote
+Tính trên server, trả quote_id, chi tiết tiền, hạn dùng và cảnh báo
+Đặt đơn
+POST /orders
+Idempotency-Key bắt buộc, xác minh quote, giữ hàng và coupon
+Thanh toán
+POST /orders/{id}/payment-attempts
+Kiểm tra đơn, số phải thu và lần thanh toán đang hoạt động
+Theo dõi và hủy
+GET /orders/{id}POST /orders/{id}/cancel
+Kiểm tra chủ đơn; hủy theo trạng thái, lý do và version
+Đổi trả
+POST /orders/{id}/returns
+Kiểm tra hàng đã giao, số lượng còn được trả và chính sách
+Quản trị
+POST /admin/stock-receiptsPOST /admin/orders/{id}/confirm
+Quyền theo nghiệp vụ; ghi audit và kiểm tra phiên bản
+Callbacks
+/integrations/{provider}/callback
+HTTP method theo nhà cung cấp; xác thực, dedup, lưu trước khi ack
+
+Hợp đồng API
+Trả dữ liệu và lỗi nhất quán: error_code, message, field_errors, request_id. Ví dụ OUT_OF_STOCK, PRICE_CHANGED, COUPON_INVALID, PAYMENT_PENDING và ORDER_STATE_CONFLICT. Dùng 409 cho xung đột nghiệp vụ cần tải lại; frontend hiển thị cách khắc phục thay vì chỉ thông báo lỗi chung.
+Cùng khóa idempotency và cùng nội dung phải nhận cùng kết quả đặt đơn; cùng khóa nhưng khác nội dung bị từ chối. Lưu khóa gắn chủ thể hoặc phiên, hash request, trạng thái và kết quả. Timeout không cho phép frontend tự tạo khóa mới rồi gửi lại ngay.
+Các trang cần thiết kế
+Web khách: trang chủ, danh mục, kết quả tìm, chi tiết hàng, giỏ, checkout, kết quả thanh toán, đăng nhập, hồ sơ, sổ địa chỉ, danh sách và chi tiết đơn, hỗ trợ, chính sách. Admin: dashboard, hàng và SKU, kho và lô, đơn, giao dịch, vận đơn, đổi trả, coupon, khách hàng, quyền, cấu hình và audit.
+Mỗi màn hình có trạng thái đang tải, rỗng, thành công, lỗi và mất quyền. Mobile ưu tiên thao tác chọn biến thể, giỏ và thanh toán; không dùng thông tin do client gửi làm căn cứ quyết định quyền hoặc giá.
+
+8 Xử lý báo giá và tạo đơn
+Luồng báo giá
+Khách gửi SKU, số lượng, địa chỉ, mã giảm giá và phương thức nhận. Backend tải giá hiện hành, điều kiện hàng, coupon và phí giao, sau đó tạo quote có thời hạn đề xuất 10 phút. Quote là báo giá, chưa phải giữ hàng. Khách phải xác nhận lại nếu tổng tiền thay đổi.
+Công thức: tiền hàng = tổng đơn giá × số lượng; phải trả = tiền hàng − giảm hàng − giảm đơn + phí ship − giảm ship + khoản thuế hoặc phí được công bố nếu có. Cửa hàng cần chốt giá hiển thị đã gồm hay chưa gồm thuế; không tự giả định thuế suất.
+Ví dụ minh họa giá đã gồm thuế: hai túi 180.000 đồng và một đồ chơi 60.000 đồng tạo tiền hàng 420.000 đồng. Voucher 10% tối đa 30.000 đồng giảm 30.000 đồng; phí ship 25.000 đồng, chưa freeship. Tổng phải trả là 415.000 đồng. Phân bổ khoản giảm xuống dòng hàng theo quy tắc làm tròn xác định để hoàn một phần chính xác.
+Transaction tạo đơn
+1. Xác minh phiên, idempotency key và nội dung request; lấy quote chưa hết hạn, kiểm tra lại điều kiện và giá.
+2. Khóa các dòng kho và hạn mức coupon theo thứ tự ổn định. Tìm đủ lô hợp lệ; nếu thiếu một SKU thì từ chối toàn bộ đơn bản đầu.
+3. Tạo đơn và dòng hàng chứa snapshot; ghi địa chỉ nhận, điều kiện giá, phân bổ giảm giá và tổng cuối cùng. Tăng giữ hàng và giữ lượt coupon.
+4. Ghi reservation, lịch sử đơn, outbox và kết quả idempotency trong cùng transaction rồi commit. Có lỗi ở bước nào thì rollback toàn bộ.
+5. Sau commit, trả đơn cho khách. Luồng online tạo yêu cầu thanh toán qua adapter; COD chờ nhân viên xác nhận. Email và đồng bộ vận chuyển không chặn việc tạo đơn.
+Chính sách coupon
+P0 dùng tối đa một coupon đơn và một ưu đãi ship nếu cấu hình cho phép cộng dồn. Quy định rõ nhóm hàng áp dụng, tổng tối thiểu tính trước hay sau giảm, ngày hiệu lực, số lượt và giới hạn mỗi khách. Giữ lượt khi tạo đơn; tiêu thụ khi online đã trả hoặc COD được xác nhận; giải phóng khi hết hạn hoặc hủy theo chính sách đã chốt.
+Giảm giá được server tính lại, không nhận thành tiền từ trình duyệt. Quy tắc này và kiểm soát bước nghiệp vụ phù hợp hướng dẫn OWASP về business logic [3].
+
+9 Chống bán vượt tồn và trạng thái đơn
+Hai khách mua sản phẩm cuối cùng
+Giả sử còn một túi: cả hai khách có thể nhìn thấy còn hàng, nhưng chỉ một transaction được giữ túi đó. Backend khóa bản ghi tồn hoặc cập nhật có điều kiện và kiểm tra số dòng cập nhật. Transaction đến sau đọc lại tồn và nhận OUT_OF_STOCK. Không kiểm tra tồn bằng một lệnh rồi cập nhật rời rạc. PostgreSQL có khóa cấp dòng hỗ trợ cơ chế này [1].
+Khóa tất cả dòng cần dùng theo thứ tự cố định để giảm deadlock; transaction ngắn, có timeout và retry giới hạn khi phù hợp. Không gọi cổng thanh toán trong lúc giữ khóa.
+Trục trạng thái
+Các trạng thái chính
+Quy tắc
+Đơn hàng
+PENDING → CONFIRMED → COMPLETED; nhánh CANCELLED hoặc EXPIRED
+CONFIRMED khi online đủ tiền hoặc COD được duyệt; COMPLETED khi đã giao theo điều kiện cửa hàng
+Thanh toán
+UNPAID, PENDING, PAID, FAILED, PARTIALLY_REFUNDED, REFUNDED
+Theo dõi từng attempt; lỗi của lần thử cũ không được ghi đè lần đã trả
+Giao hàng
+UNFULFILLED, PACKING, SHIPPED, DELIVERED, DELIVERY_FAILED, RETURNING, RETURNED
+DELIVERY_FAILED có thể giao lại hoặc hoàn về; sự kiện cũ không làm lùi trạng thái
+Giữ hàng
+ACTIVE → COMMITTED → CONSUMED; nhánh RELEASED hoặc EXPIRED
+ACTIVE có hạn; COMMITTED không bị job hết hạn thông thường giải phóng
+Đối soát COD
+NOT_COLLECTED, COLLECTED_BY_CARRIER, SETTLED
+Khách đã trả cho shipper và shop đã nhận tiền là hai thời điểm khác nhau
+
+Bất biến bắt buộc
+Tồn khả dụng và số lượng giữ không âm; không xuất cùng một reservation hai lần. Mọi thay đổi số lượng phải có nguyên nhân và dấu vết.
+Không giao đơn online chưa xác nhận đủ tiền; COD chỉ giao sau xác nhận đơn. Không đánh dấu đã thu chỉ vì khách gửi ảnh chuyển khoản hoặc trình duyệt báo thành công.
+Đơn và snapshot không đổi khi admin sửa giá sản phẩm, tên hoặc địa chỉ mặc định. Điều chỉnh đơn đã chốt phải có quy trình riêng; bản đầu ưu tiên hủy và đặt lại trước giao.
+Trả hàng một phần không tự biến cả đơn thành chưa giao hoặc hoàn toàn bộ. Lịch sử trạng thái, tiền và hàng vẫn được giữ.
+
+10 Xử lý thanh toán và hoàn tiền
+Thanh toán online
+Tạo payment_attempt với mã tham chiếu duy nhất, số tiền từ đơn và hạn thanh toán. Khách được chuyển sang cổng. URL quay lại chỉ hiển thị tiến trình; backend nhận IPN hoặc webhook, kiểm tra chữ ký, mã tham chiếu, số tiền, tiền tệ và trạng thái giao dịch trước khi ghi nhận. Tài liệu VNPAY phân biệt Return URL và IPN và yêu cầu kiểm tra checksum [2].
+Trong transaction ngắn, khóa payment và order, kiểm tra đã xử lý hay chưa, ghi sự kiện, xác nhận tiền và chuyển giữ hàng sang COMMITTED. Cùng lúc ghi outbox để thông báo và xử lý tiếp. Chỉ trả phản hồi thành công cho cổng sau khi thông tin đã được lưu bền vững.
+Tình huống
+Cách xử lý
+Callback lặp hoặc sai thứ tự
+Dedup theo tham chiếu sự kiện/giao dịch và chuyển trạng thái hợp lệ. Thành công đã xác minh không bị callback thất bại cũ ghi đè.
+Khách trả tiền nhưng đóng tab
+IPN hoặc truy vấn đối soát vẫn cập nhật đơn. Khi quay lại, frontend đọc trạng thái từ backend.
+Timeout khi gọi nhà cung cấp
+Đánh dấu kết quả chưa rõ, truy vấn bằng mã tham chiếu cũ. Không kết luận thất bại rồi tạo một lần thu mới ngay.
+Callback đến sau khi hết giữ hàng
+Vẫn ghi nhận khoản thu đã xác minh. Thử giữ lại tồn nguyên tử; nếu không đủ thì đưa vào xử lý ngoại lệ và hoàn tiền, không tự cho giao.
+Job hết hạn chạy cùng lúc callback
+Cùng khóa order và reservation; chỉ một nhánh cập nhật. Nhánh đến sau đọc lại trạng thái đã commit.
+Khách thanh toán hai lần
+Ghi đủ hai khoản nhận; chỉ phân bổ một khoản vào nghĩa vụ của đơn. Khoản dư chuyển đối soát và hoàn; không tạo hai lần xuất.
+
+Hoàn tiền và chuyển khoản
+Refund có yêu cầu, phê duyệt, gửi cổng, đang chờ, thành công hoặc lỗi; mỗi yêu cầu có mã tham chiếu và số tiền. Khóa kiểm tra tổng đã hoàn cộng đang chờ không vượt số đã thu. Timeout phải truy vấn trước khi gửi lại. Chỉ hiển thị đã hoàn sau khi cổng hoặc đối soát xác nhận.
+Nếu P0 dùng chuyển khoản thủ công thay cổng: ghi mã nội dung chuyển khoản theo đơn, nhân viên đối chiếu giao dịch ngân hàng thực nhận; ảnh chụp chỉ là tài liệu hỗ trợ. Cửa hàng cần có cách hoàn thủ công được duyệt và lưu chứng từ, kể cả khi API hoàn tiền chưa tích hợp.
+
+11 Giao hàng hủy đơn và đổi trả
+Giao hàng và đóng gói
+Sau xác nhận, kho in phiếu lấy hàng với SKU, lô và số lượng; đối chiếu hoặc quét mã rồi đóng gói. Kiểm tra lại hạn dùng trước xuất. Tạo shipment với địa chỉ snapshot, khối lượng cả bao bì, kích thước, số COD và mã tham chiếu. Bản đầu cho phép nhập mã vận đơn thủ công nếu chưa tích hợp, nhưng vẫn lưu lịch sử và người cập nhật.
+Nhà cung cấp lỗi thì giữ shipment ở trạng thái cần thử lại, không tạo vận đơn thứ hai thiếu kiểm soát. Nếu API timeout, tra cứu mã tham chiếu trước khi gửi lại. Khi bàn giao, xuất kho và tiêu thụ giữ hàng trong một transaction; trạng thái giao sau đó cập nhật qua callback đã xác thực hoặc truy vấn định kỳ.
+Hủy đơn
+Chờ thanh toán hoặc chưa xác nhận COD: khách có thể yêu cầu hủy; server kiểm tra lại trạng thái, giải phóng giữ hàng và coupon đúng một lần.
+Đã trả tiền, chưa bàn giao: hủy đơn theo chính sách, giải phóng giữ hàng nếu còn giữ và tạo nghĩa vụ hoàn. Trạng thái hủy không có nghĩa tiền đã hoàn xong.
+Đã bàn giao: chuyển thành yêu cầu ngừng giao hoặc hoàn hàng; không cộng lại tồn ngay. Nếu hãng vẫn giao thành công, chuyển xử lý ngoại lệ.
+Đổi trả và hàng giao thất bại
+Khách chọn dòng hàng, số lượng, lý do và ảnh. Hệ thống kiểm tra thời hạn theo chính sách được lưu khi đặt hàng, số đã giao và số đã trả. Nhân viên duyệt, nhận hàng, phân loại còn bán được, cách ly hoặc loại bỏ. Chỉ hàng đạt kiểm tra mới cộng về kho bán được; thức ăn đã mở không tự động nhập lại để bán.
+Hoàn một phần dùng giá thực trả của dòng sau phân bổ giảm giá, không dùng giá hiện tại. Phí ship được hoàn hay không theo nguyên nhân và chính sách. Tổng tiền hoàn kể cả yêu cầu đang chờ không vượt khoản được phép hoàn. Đổi size ở bản đầu thực hiện bằng yêu cầu trả và một đơn thay thế có liên kết, kiểm tra lại tồn.
+COD và đối soát
+Hãng báo đã giao có thể đồng thời báo đã thu từ khách; lưu riêng số tiền và thời điểm. Khi hãng chuyển tiền về shop, ghi đợt đối soát, phí và chênh lệch. Đơn bị hoàn phải xác nhận hàng thực về trước khi nhập kho; phí giao đi và giao lại được giữ trong báo cáo chi phí.
+Nghiệm thu mẫu: callback đã giao lặp không tạo hai lần ghi nhận; giao thất bại rồi hoàn về không tăng tồn hai lần; trả một món trong đơn ba món chỉ hoàn đúng món được duyệt.
+
+12 Tác vụ nền và khả năng phục hồi
+Outbox để tránh mất công việc
+Khi đơn được tạo hoặc thanh toán được xác nhận, ghi outbox_events cùng transaction với nghiệp vụ. Worker nhận sự kiện, đánh dấu đang xử lý bằng lease có hạn, thực hiện tác vụ và lưu kết quả. Nếu worker chết, lease hết hạn cho phép nhận lại. Sự kiện chỉ kết thúc khi tác vụ tương ứng đã hoàn thành bền vững.
+Hệ thống chấp nhận một job có thể được giao nhiều lần; từng thao tác phải chống trùng bằng khóa nghiệp vụ. Outbox ghi riêng trạng thái đã đưa vào queue và trạng thái xử lý xong; có tiến trình quét công việc quá hạn để phục hồi nếu queue mất dữ liệu. Redis không thay thế lịch sử và nghĩa vụ nghiệp vụ trong PostgreSQL.
+Tác vụ
+Lịch đề xuất
+Lỗi và xử lý
+Giải phóng giữ hàng
+Mỗi phút, theo expires_at trong DB
+Khóa đơn và reservation; bỏ qua đã cam kết; retry không giải phóng lặp
+Xử lý outbox
+Liên tục hoặc chu kỳ vài giây
+Retry có backoff và jitter; hết lượt vào danh sách cần xử lý
+Đối soát thanh toán chờ
+Theo nhịp cho phép của cổng
+Truy vấn cùng reference; cảnh báo quá hạn; không tự suy đoán kết quả
+Đồng bộ vận đơn
+Callback và polling bổ sung
+Dedup, kiểm tra thứ tự, tra cứu khi kết quả mâu thuẫn
+Gửi email và thông báo
+Sau sự kiện nghiệp vụ
+Lưu trạng thái gửi, khóa chống trùng khi hỗ trợ; lỗi không rollback đơn
+Hàng gần hạn hoặc sắp hết
+Hằng ngày và sau biến động kho
+Ngưỡng theo SKU; gửi cảnh báo gộp; loại lô không đủ điều kiện ngay khi tính tồn
+Báo cáo và đối soát COD
+Theo ngày hoặc kỳ của hãng
+Kiểm tra chênh lệch, ghi lần đối soát; cho phép chạy lại có kiểm soát
+
+Tích hợp bên ngoài
+Tất cả adapter có timeout, mã tham chiếu, ghi log đã che dữ liệu, giới hạn retry và cách truy vấn trạng thái. 4xx do dữ liệu sai thường cần sửa; timeout hoặc 5xx cần phân biệt chưa xử lý và đã xử lý nhưng mất phản hồi. Không hứa exactly once cho email hoặc nhà cung cấp không có cơ chế dedup.
+Tác vụ quan trọng chạy trong worker có dữ liệu khôi phục được. FastAPI có BackgroundTasks cho công việc chạy sau response và nêu lựa chọn công cụ hàng đợi cho nhu cầu lớn hơn [4]; kế hoạch này dùng worker riêng để có retry và theo dõi vận hành.
+
+13 Bảo mật chất lượng và nội dung
+Bảo mật bắt buộc trước bán thật
+Hash mật khẩu bằng thuật toán phù hợp như Argon2id qua thư viện đã duy trì; reset token dùng một lần và hết hạn. Admin dùng MFA, xác thực lại khi đổi quyền, cấu hình thanh toán hoặc duyệt hoàn lớn.
+Phiên trình duyệt dùng cookie HttpOnly, Secure và SameSite phù hợp. Bảo vệ CSRF cho thao tác dùng cookie; kiểm tra quyền trên server cho mọi đơn, ảnh khiếu nại và API quản trị.
+Giới hạn đăng nhập, reset, tra cứu đơn, upload và checkout. Validate loại, dung lượng và nội dung ảnh; tái mã hóa ảnh phù hợp, không thực thi tệp upload. Làm sạch HTML mô tả và bình luận.
+Secret cổng chỉ ở server, tách môi trường test và thật. Không lưu dữ liệu thẻ; chuyển khách sang giao diện nhà cung cấp. Không ghi mật khẩu, token, toàn bộ địa chỉ hoặc dữ liệu thanh toán nhạy cảm vào log.
+Ghi audit thay đổi quyền, giá, tồn, trạng thái và hoàn tiền. Có chính sách truy cập, lưu giữ và xóa dữ liệu khách; xử lý yêu cầu xóa theo nghĩa vụ lưu chứng từ đã được rà soát.
+Chất lượng giao diện và hiệu năng
+Thiết kế mobile trước, hỗ trợ bàn phím, nhãn trường nhập, tương phản và focus rõ. Giá, điều kiện giảm, phí giao và tổng cuối phải đọc được trước xác nhận. Nút đặt đơn chống bấm lặp ở UI nhưng backend vẫn phải chống tạo trùng.
+Mục tiêu kiểm thử ban đầu: 100 người dùng đồng thời theo kịch bản gồm 90% đọc danh mục, 8% cập nhật giỏ và 2% checkout trong 15 phút. API đọc p95 dưới 500 ms; transaction tạo đơn p95 dưới 1 giây, chưa tính mạng nhà cung cấp; lỗi nội bộ dưới 1%. Đây là mục tiêu cần đo, không phải cam kết cấu hình server sẽ đạt.
+Cache danh mục và nội dung công khai; không dùng cache để chốt tồn, coupon hoặc tiền. Tối ưu kích thước ảnh, lazy loading, phân trang, giới hạn truy vấn và tránh N+1. Quan sát DB và worker để quyết định nâng cấp.
+SEO và nội dung
+Trang sản phẩm có title, mô tả, URL ổn định, canonical, sitemap và ảnh có alt text. Cấu trúc Product và ProductGroup cần khớp giá, biến thể và tồn hiển thị theo hướng dẫn Google [5]; đánh dấu hợp lệ không bảo đảm xuất hiện kết quả nổi bật.
+Trang vận chuyển, đổi trả, bảo mật và điều khoản là nội dung cấu hình, cần chủ cửa hàng duyệt theo mô hình kinh doanh trước phát hành. Không dùng chính sách mẫu như một kết luận pháp lý.
+
+14 Triển khai và vận hành hệ thống
+Môi trường và triển khai
+Tách local, staging và production với database, secret và tài khoản tích hợp khác nhau. Giai đoạn đầu có thể đóng gói web, API, worker, scheduler, PostgreSQL và Redis bằng Docker Compose; chỉ reverse proxy mở ra Internet. Một máy chủ có rủi ro gián đoạn khi máy hỏng, nên bản bán thật cần sao lưu ngoài máy và quy trình phục hồi.
+CI chạy lint, kiểm thử nghiệp vụ, kiểm thử tích hợp, build và kiểm tra migration. CD triển khai staging trước, chạy luồng mua hoàn chỉnh, sau đó phát hành production có kế hoạch quay lại bản ứng dụng trước. Migration nên tương thích với phiên bản cũ trong lúc chuyển; dữ liệu đã đổi không được giả định rollback tự động.
+Sao lưu và khôi phục
+Mục tiêu vận hành đề xuất: RPO không quá 15 phút và RTO không quá 2 giờ cho dữ liệu giao dịch. Muốn đạt RPO này cần cơ chế lưu WAL liên tục và bản sao ngoài máy; chỉ backup mỗi ngày là chưa đủ. Kiểm tra khôi phục vào môi trường độc lập và đo thời gian thực tế trước khi xác nhận mục tiêu đã đạt.
+Ảnh và tài liệu có chính sách version hoặc backup riêng. Sau khôi phục DB, chạy đối soát cổng và hãng vận chuyển từ mốc phục hồi, vì tiền hoặc giao hàng có thể đã diễn ra ở bên ngoài trong khoảng dữ liệu bị mất. Kiểm tra job và callback chống lặp trước mở lại xử lý.
+Theo dõi
+Cảnh báo đề xuất
+Hành động
+API và database
+Lỗi 5xx > 1% trong 5 phút; p95 tăng kéo dài
+Kiểm tra request_id, truy vấn chậm, khóa và connection pool
+Payment
+Đơn đã nhận tiền nhưng chưa đủ điều kiện xử lý; pending quá SLA
+Đối soát provider; đưa vào danh sách ngoại lệ
+Worker và outbox
+Job chờ quá ngưỡng; không có heartbeat; nhiều retry
+Khởi động lại an toàn, kiểm tra nhà cung cấp, replay theo ID
+Kho
+Tồn âm, lượng giữ lệch, lô hết hạn còn được phân bổ
+Chặn SKU hoặc lô, kiểm kê; điều chỉnh có audit
+Hạ tầng và backup
+Ổ đĩa, RAM, lỗi backup hoặc kiểm tra khôi phục
+Giải phóng log có chính sách, mở rộng dung lượng, sửa backup
+
+Bảng xử lý ngoại lệ phải có người phụ trách, thời điểm phát hiện, mức ưu tiên, lý do, hành động và trạng thái. Vấn đề tiền hoặc hàng không được biến mất sau khi một job hết lượt retry.
+
+15 Lộ trình và đầu việc triển khai
+Ước lượng định hướng cho một lập trình viên full stack làm toàn thời gian: khoảng 12 đến 16 tuần cho P0 tùy kinh nghiệm, chất lượng dữ liệu và tốc độ được cấp tích hợp. Đây không phải cam kết tiến độ; ước lượng lại sau khi chốt chính sách, làm prototype và hoàn thành một luồng thanh toán sandbox.
+Giai đoạn
+Thời lượng gợi ý
+Đầu ra và phụ thuộc
+1 Chốt nghiệp vụ
+Tuần 1
+Phạm vi, chính sách, ma trận quyền, sản phẩm mẫu, sơ đồ trạng thái; chọn cổng và hãng vận chuyển
+2 Nền tảng
+Tuần 2 đến 3
+Repository, môi trường, auth, quyền, migration, contract API, layout web và admin
+3 Catalog và kho
+Tuần 4 đến 5
+Sản phẩm, SKU, lô, nhập kho, tìm kiếm, chi tiết hàng; có seed dữ liệu kiểm thử
+4 Mua hàng
+Tuần 6 đến 7
+Giỏ, quote, coupon, checkout, snapshot, giữ kho, idempotency và khách vãng lai
+5 Thanh toán
+Tuần 8 đến 9
+COD, cổng online, callback, đối soát, hết hạn, hoàn tiền và tình huống trả muộn
+6 Fulfillment
+Tuần 10 đến 11
+Đóng gói, bàn giao, vận đơn, hủy, hỗ trợ, trả hàng, COD settlement
+7 Hoàn thiện P0
+Tuần 12 đến 13
+Báo cáo cơ bản, nội dung chính sách, audit, monitoring, backup, test tải và bảo mật
+8 Dự phòng và pilot
+Tuần 14 đến 16
+Sửa lỗi tích hợp, diễn tập phục hồi, đơn thử thật quy mô nhỏ, vận hành có giám sát
+
+Thứ tự phát triển
+Chốt nghiệp vụ và dữ liệu trước; thiết kế UI mẫu và hợp đồng API tiếp theo. Frontend có thể dùng mock theo hợp đồng trong khi backend xây dựng. Mỗi lát cắt phải chạy từ UI đến DB: tạo SKU và nhập kho, mua COD, mua online, giao hàng, trả hàng. Không để toàn bộ tích hợp đến cuối dự án.
+Các phần để sau P0
+P1 triển khai theo mức tác động: đánh giá đã mua, yêu thích, hồ sơ thú cưng, mua lại, quản lý nội dung, nhập dữ liệu hàng loạt, báo cáo theo nhóm hàng. P2 thêm tích điểm bằng ledger, nhắc mua định kỳ có đồng ý nhận tin, gợi ý sản phẩm, chatbot giới hạn theo danh mục và chính sách. Tự động trừ tiền định kỳ chỉ thiết kế khi cổng hỗ trợ và khách đã ủy quyền rõ ràng.
+Không cần GPU cho luồng thương mại điện tử cơ bản. Tìm ảnh tương tự hoặc nhận diện thú cưng là module tùy chọn, chỉ nên thêm khi giải quyết được nhu cầu đã xác định; tách chi phí và kiểm thử riêng.
+
+16 Kịch bản nghiệm thu quan trọng
+Mã
+Kịch bản
+Kết quả bắt buộc
+T01
+Hai checkout tranh SKU cuối
+Chỉ một đơn giữ được hàng; không có tồn âm
+T02
+Bấm đặt đơn nhiều lần, mạng timeout
+Cùng key trả cùng đơn; không giữ thêm kho hoặc coupon
+T03
+Sửa giá và discount trong request
+Server dùng giá chuẩn hoặc từ chối; không nhận giá client
+T04
+Coupon còn một lượt, hai đơn đồng thời
+Chỉ một lượt được giữ; giải phóng đúng khi hết hạn
+T05
+Callback sai chữ ký hoặc sai số tiền
+Không ghi PAID; lưu sự kiện cần điều tra phù hợp
+T06
+Callback thành công gửi lặp và đảo thứ tự
+Chỉ một lần ghi nhận tác động; không lùi trạng thái đã trả
+T07
+Đã thu tiền nhưng trình duyệt đóng
+Đơn được cập nhật qua callback hoặc đối soát
+T08
+Callback cùng lúc job hết hạn
+Không vừa nhả hàng vừa cho xuất; xử lý theo khóa và trạng thái
+T09
+Tiền đến muộn sau khi hàng hết
+Ghi khoản thu, đưa ngoại lệ và hoàn; không tạo tồn giả
+T10
+Hủy đơn online đã trả trước bàn giao
+Giải phóng giữ hàng và tạo hoàn; không báo đã hoàn sớm
+T11
+Giao thất bại, hàng chưa về kho
+Không cộng tồn; chỉ cộng sau kiểm tra hàng thực nhận
+T12
+Trả một phần có coupon giảm đơn
+Hoàn theo phân bổ đã lưu; không vượt tiền thực nhận
+T13
+Refund timeout rồi retry
+Tra cứu reference; không hoàn gấp đôi
+T14
+Khách A đọc đơn hoặc ảnh của B
+Bị từ chối ở API và đường dẫn file riêng tư
+T15
+Kho gọi API thay giá hoặc hoàn tiền
+Bị chặn theo quyền; có log kiểm tra phù hợp
+T16
+Worker chết sau khi gọi nhà cung cấp
+Khôi phục bằng reference và kiểm tra trạng thái trước retry
+T17
+Khôi phục DB từ backup
+Dữ liệu đọc được, đo RPO/RTO và đối soát sự kiện bên ngoài
+T18
+Lô quá hạn hoặc thiếu hạn dùng bắt buộc
+Không được phân bổ vào đơn; có cảnh báo xử lý
+
+Kiểm thử ba lớp: unit cho quy tắc tiền và trạng thái; integration với PostgreSQL thật cho khóa, rollback và unique constraint; end to end trên mobile và desktop cho mua, thanh toán, giao và hoàn. Các kịch bản cạnh tranh phải dùng request đồng thời, không chỉ chạy lần lượt.
+
+17 Điều kiện phát hành và quyết định cần chốt
+Điều kiện phát hành P0
+Toàn bộ luồng COD và online chạy trên staging; kiểm tra callback thành công, thất bại, lặp, muộn và mất kết nối. Không còn lỗi nghiêm trọng liên quan tiền, tồn, quyền hoặc lộ dữ liệu.
+Có dữ liệu hàng được duyệt: ảnh, SKU, giá, thông số, khối lượng gửi, lô và hạn dùng. Có tồn thực đối chiếu trước mở bán.
+Cấu hình sản xuất, domain, HTTPS, IPN, secret và webhook đã kiểm tra. Có ít nhất một lần thử thu và hoàn trong môi trường thật khi được cấp quyền.
+Có người phụ trách đơn, hỗ trợ, hàng hoàn và đối soát. Chính sách, thời hạn xử lý và thông tin liên hệ được duyệt và hiển thị.
+Backup đã khôi phục thử; monitoring hoạt động; có kế hoạch tạm dừng checkout, quay lại phiên bản và xử lý đơn đang chờ khi sự cố.
+Những quyết định ảnh hưởng thiết kế
+Cần chốt
+Mặc định trong kế hoạch
+Một shop hay sàn nhiều người bán
+Một shop; nếu sàn phải thêm seller, commission, payout và tranh chấp
+Kho và giao hàng
+Một kho; một địa chỉ và một vận đơn mỗi đơn; chưa giao tách kiện
+Thanh toán
+COD và một cổng online; thời hạn giữ online dự kiến 15 phút, căn chỉnh với hạn cổng
+Chính sách kho
+FEFO cho hàng hạn dùng; ngưỡng thời hạn còn lại theo nhóm hàng
+Giá và khuyến mại
+VND; tối đa một coupon đơn; freeship có điều kiện cấu hình rõ
+Đổi trả và hoàn
+Theo nhóm hàng, tình trạng mở bao bì và nguyên nhân; có hoàn một phần
+Quy mô và nhân sự
+Đo tải bằng kịch bản mục tiêu; một dev 12 đến 16 tuần chỉ là dự toán ban đầu
+
+Tài liệu kỹ thuật tham khảo
+[1] PostgreSQL — Explicit Locking. https://www.postgresql.org/docs/current/explicit-locking.html
+[2] VNPAY — Kết nối cổng thanh toán và FAQ về Return URL, IPN. https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html và https://sandbox.vnpayment.vn/apis/docs/faqs/
+[3] OWASP — Business Logic Security Cheat Sheet. https://cheatsheetseries.owasp.org/cheatsheets/Business_Logic_Security_Cheat_Sheet.html
+[4] FastAPI — Background Tasks. https://fastapi.tiangolo.com/tutorial/background-tasks/
+[5] Google Search Central — Product variant structured data. https://developers.google.com/search/docs/appearance/structured-data/product-variants

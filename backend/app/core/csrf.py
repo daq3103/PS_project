@@ -32,6 +32,7 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             or request.cookies.get("refresh_token")
             or request.cookies.get("csrf_token")
             or request.cookies.get("guest_token")
+            or request.cookies.get("rescue_session")
         )
         if not has_auth_cookie:
             return await call_next(request)
@@ -39,6 +40,6 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         cookie_csrf = request.cookies.get("csrf_token")
         header_csrf = request.headers.get("X-CSRF-Token")
         if not cookie_csrf or not header_csrf or cookie_csrf != header_csrf:
-            return JSONResponse({"detail": "CSRF validation failed"}, status_code=403)
+            return JSONResponse({"detail": "Phiên đăng nhập không hợp lệ. Vui lòng tải lại trang rồi thử lại."}, status_code=403)
 
         return await call_next(request)

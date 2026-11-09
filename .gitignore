@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!.env.staging.example
 cloudflare-tunnel-demo/.env
 *.pyc
 __pycache__/
@@ -23,5 +26,12 @@ coverage/
 htmlcov/
 qa-e2e/community-qa.json
 frontend/openapi.generated.json
+.local-backups/
 
 frontend/node_modules/*
+
+# Local deliveries, generated QA evidence, and incremental compiler state
+/PS_project.tar.gz
+/PetHome-screenshots/
+/test-reports/
+*.tsbuildinfo
